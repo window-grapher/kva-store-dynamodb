@@ -10,6 +10,8 @@ exports.handler = async (event) => {
         return await handleGetRequest(event)
       case 'POST':
         return await handlePostRequest(event)
+      case 'DELETE':
+        return await handleDeleteRequest(event)
     }
   } catch (error) {
     console.error(error)
@@ -86,6 +88,40 @@ async function handlePostRequest (event) {
   return {
     statusCode: 200,
     body: JSON.stringify({ message: 'Item created successfully' }),
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  }
+}
+
+async function handleDeleteRequest (event) {
+  // DELETEリクエストでidパラメータが必要です
+  if (!event.queryStringParameters || !event.queryStringParameters.key || !event.queryStringParameters.created) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ message: 'key and created parameter is required' }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }
+  }
+
+  const key = event.queryStringParameters.key
+  const created = event.queryStringParameters.created
+
+  const params = {
+    TableName: 'keyValueArrayStoreTable', // DynamoDBテーブル名
+    Key: {
+      key,
+      created
+    }
+  }
+
+  await dynamoDB.delete(params).promise()
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: 'Item deleted successfully' }),
     headers: {
       'Content-Type': 'application/json'
     }
