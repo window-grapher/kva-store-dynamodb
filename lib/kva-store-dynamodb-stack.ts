@@ -10,7 +10,7 @@ export class KvaStoreDynamodbStack extends cdk.Stack {
 
     // DynamoDBテーブルの定義
     const table = new dynamodb.Table(this, 'keyValueArrayStoreTable', {
-      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      partitionKey: { name: 'key', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'created', type: dynamodb.AttributeType.STRING },
       tableName: 'keyValueArrayStoreTable',
       // その他の設定...
