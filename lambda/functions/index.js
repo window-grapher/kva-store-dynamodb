@@ -2,7 +2,12 @@ const AWS = require('aws-sdk');
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
 
 exports.handler = async (event) => {
+    const httpMethod = event.requestContext.http.method;
     try {
+        // POSTリクエストの処理
+        if (httpMethod === 'POST') {
+            return await handlePostRequest(event);
+        }
         if (!event.queryStringParameters || !event.queryStringParameters.key) {
             return {
                 statusCode: 400,
@@ -46,13 +51,47 @@ exports.handler = async (event) => {
             }
         };
     } catch (error) {
-        console.error(error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ message: error.message }),
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        };
-    }
+      console.error(error);
+      return errorResponse(error.message);
+  }
 };
+
+async function handlePostRequest(event) {
+  const body = JSON.parse(event.body);
+  const readable = body.readable;
+  const owner = body.owner;
+  const created = new Date().toISOString(); // 現在の日時をISO 8601形式で取得
+  const data = body.data;
+
+  const newItem = {
+      TableName: 'keyValueArrayStoreTable', // DynamoDBテーブル名
+      Item: {
+          key: body.key,
+          readable,
+          owner,
+          created, // 'created'フィールドに日時を設定
+          data,
+          // その他のデータ項目...
+      }
+  };
+
+  await dynamoDB.put(newItem).promise();
+
+  return {
+      statusCode: 200,
+      body: JSON.stringify({ message: 'Item created successfully' }),
+      headers: {
+          'Content-Type': 'application/json'
+      }
+  };
+}
+
+function errorResponse(errorMessage) {
+  return {
+      statusCode: 500,
+      body: JSON.stringify({ message: errorMessage }),
+      headers: {
+          'Content-Type': 'application/json'
+      }
+  };
+}
