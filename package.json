@@ -8,7 +8,8 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "lint": "eslint . --fix"
   },
   "devDependencies": {
     "@types/jest": "^29.5.11",
@@ -25,6 +26,8 @@
     "@aws-cdk/aws-s3": "^1.204.0",
     "aws-cdk-lib": "2.124.0",
     "constructs": "^10.0.0",
-    "source-map-support": "^0.5.21"
+    "source-map-support": "^0.5.21",
+    "eslint": "^8.56.0",
+    "eslint-config-standard": "^17.1.0"
   }
 }
