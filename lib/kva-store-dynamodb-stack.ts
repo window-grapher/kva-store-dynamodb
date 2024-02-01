@@ -15,7 +15,16 @@ export class KvaStoreDynamodbStack extends cdk.Stack {
       tableName: 'keyValueArrayStoreTable',
       // その他の設定...
     });
-
+    // ローカルセカンダリインデックスの追加
+    const secondaryIndexes = ['readable', 'owner', 'path', 'data', 'id'];
+    for (const indexName of secondaryIndexes) {
+      table.addLocalSecondaryIndex({
+        indexName: `${indexName}Index`,
+        sortKey: { name: indexName, type: dynamodb.AttributeType.STRING },
+        projectionType: dynamodb.ProjectionType.ALL, // 必要に応じて変更
+      });
+    }
+    
     // Lambda関数の定義
     const myFunction = new lambda.Function(this, 'keyValueArrayStoreHandler', {
       runtime: lambda.Runtime.NODEJS_20_X,

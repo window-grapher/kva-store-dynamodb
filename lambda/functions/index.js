@@ -66,8 +66,8 @@ async function handleGetRequest (event) {
 
 async function handlePostRequest (event) {
   const body = JSON.parse(event.body)
-  const readable = body.readable
-  const owner = body.owner
+  const readable = body.readable ?? "*"
+  const owner = body.owner ?? 'anonymous'
   const created = new Date().toISOString() // 現在の日時をISO 8601形式で取得
   const data = body.data
 
