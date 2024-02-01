@@ -1,11 +1,19 @@
 {
   "env": {
       "browser": true,
-      "commonjs": true,
+      "commonjs": false,
       "es2021": true
   },
   "extends": "standard",
   "parserOptions": {
       "ecmaVersion": "latest"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["*.mjs"],
+      "parserOptions": {
+        "sourceType": "module"
+      }
+    }
+  ]
 }

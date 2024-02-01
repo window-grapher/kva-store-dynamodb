@@ -1,7 +1,12 @@
-const AWS = require('aws-sdk')
-const dynamoDB = new AWS.DynamoDB.DocumentClient()
+// DynamoDBクライアントのインポート
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
+import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb'
 
-exports.handler = async (event) => {
+// DynamoDBクライアントのインスタンスを作成
+const dynamoDBClient = new DynamoDBClient({})
+const dynamoDB = DynamoDBDocumentClient.from(dynamoDBClient)
+
+export const handler = async (event) => {
   const httpMethod = event.requestContext.http.method
   try {
     // POSTリクエストの処理
@@ -38,22 +43,23 @@ async function handleGetRequest (event) {
   }
 
   const params = {
-    TableName: 'keyValueArrayStoreTable', // DynamoDBテーブル名
-    KeyConditionExpression: '#key = :keyValue', // '#key'を使用
+    TableName: 'keyValueArrayStoreTable',
+    KeyConditionExpression: '#key = :keyValue',
     ExpressionAttributeNames: {
-      '#key': 'key' // '#key'は実際の属性名'key'を指す
+      '#key': 'key'
     },
     ExpressionAttributeValues: {
       ':keyValue': keyParam
     },
-    ScanIndexForward: false // 新しい順にソート
+    ScanIndexForward: false
   }
 
   if (limitParam) {
     params.Limit = limitParam
   }
 
-  const data = await dynamoDB.query(params).promise()
+  const command = new QueryCommand(params)
+  const data = await dynamoDB.send(command)
 
   return {
     statusCode: 200,
@@ -66,24 +72,24 @@ async function handleGetRequest (event) {
 
 async function handlePostRequest (event) {
   const body = JSON.parse(event.body)
-  const readable = body.readable ?? "*"
+  const readable = body.readable ?? '*'
   const owner = body.owner ?? 'anonymous'
   const created = new Date().toISOString() // 現在の日時をISO 8601形式で取得
   const data = body.data
 
   const newItem = {
-    TableName: 'keyValueArrayStoreTable', // DynamoDBテーブル名
+    TableName: 'keyValueArrayStoreTable',
     Item: {
       key: body.key,
       readable,
       owner,
-      created, // 'created'フィールドに日時を設定
+      created,
       data
-      // その他のデータ項目...
     }
   }
 
-  await dynamoDB.put(newItem).promise()
+  const command = new PutCommand(newItem)
+  await dynamoDB.send(command)
 
   return {
     statusCode: 200,
@@ -110,14 +116,15 @@ async function handleDeleteRequest (event) {
   const created = event.queryStringParameters.created
 
   const params = {
-    TableName: 'keyValueArrayStoreTable', // DynamoDBテーブル名
+    TableName: 'keyValueArrayStoreTable',
     Key: {
       key,
       created
     }
   }
 
-  await dynamoDB.delete(params).promise()
+  const command = new DeleteCommand(params)
+  await dynamoDB.send(command)
 
   return {
     statusCode: 200,
