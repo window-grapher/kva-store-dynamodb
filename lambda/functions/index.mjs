@@ -144,3 +144,5 @@ function errorResponse (errorMessage) {
     }
   }
 }
+
+export { handleGetRequest, handlePostRequest, handleDeleteRequest }
