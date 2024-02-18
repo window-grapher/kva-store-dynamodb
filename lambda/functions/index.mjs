@@ -31,6 +31,13 @@ export const handler = async (event) => {
         return await handlePostRequest(event);
       case 'DELETE':
         return await handleDeleteRequest(event);
+      case 'OPTIONS':
+        // Respond to CORS pre-flight request
+        return createResponse(204, {}, {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+          'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,DELETE'
+        });
       default:
         return createResponse(405, { message: 'Method Not Allowed' });
     }
@@ -133,13 +140,16 @@ async function handleDeleteRequest(event) {
   }
 }
 
-// Utility function for creating HTTP responses
+// Utility function for creating HTTP responses with CORS enabled
 function createResponse(statusCode, body) {
   return {
     statusCode,
     body: JSON.stringify(body),
     headers: {
       'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+      'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,DELETE',
     },
   };
 }
