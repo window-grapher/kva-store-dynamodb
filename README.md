@@ -21,3 +21,7 @@ The `cdk.json` file tells the CDK Toolkit how to execute your app.
 ーーー
 
 - API側でのデータ暗号化
+
+## system
+
+systemSecretToken-xxx

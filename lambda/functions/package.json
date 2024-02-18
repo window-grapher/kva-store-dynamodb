@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-  },
-  "devDependencies": {
+    "axios": "^1.6.7",
+    "jsonwebtoken": "^9.0.2"
   }
 }

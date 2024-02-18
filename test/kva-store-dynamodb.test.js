@@ -1,76 +1,56 @@
-import { handler, handleGetRequest, handlePostRequest, handleDeleteRequest } from '../lambda/functions/index.mjs';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import axios from 'axios';
 
-jest.mock('@aws-sdk/client-dynamodb', () => ({
-  DynamoDBClient: jest.fn(),
-}));
+require('dotenv').config();
 
-jest.mock('@aws-sdk/lib-dynamodb', () => ({
-  DynamoDBDocumentClient: {
-    from: jest.fn().mockReturnValue({
-      send: jest.fn(),
-    }),
-  },
-  QueryCommand: jest.fn(),
-  PutCommand: jest.fn(),
-  DeleteCommand: jest.fn(),
-}));
+describe('Get, Add, Delete by anonymous', () => {
+  const apiUrl = process.env.API_URL;
+  const secretToken = process.env.SECRET_TOKEN; // シークレットトークンも環境変数から取得
 
-describe('DynamoDB Lambda Handler', () => {
-  const mockSend = DynamoDBDocumentClient.from().send;
+  it('データ一覧を取得し、全てのデータを削除する', async () => {
+    // データ一覧を取得
+    const response = await axios.get(`${apiUrl}?key=testKey&limit=10`);
+    expect(response.status).toBe(200);
 
-  beforeEach(() => {
-    DynamoDBClient.mockClear();
-    DynamoDBDocumentClient.from.mockClear();
-    mockSend.mockClear();
-    QueryCommand.mockClear();
-    PutCommand.mockClear();
-    DeleteCommand.mockClear();
+    // データを削除
+    await Promise.all(
+      response.data.map(async (item) => {
+        await axios.delete(apiUrl, {
+          body: JSON.stringify({ key: 'testKey', created: item.created }),
+          headers: { SecretToken: `${secretToken}`}
+        });
+      })
+    );
   });
 
-  it('should handle GET request', async () => {
-    const event = {
-      requestContext: { http: { method: 'GET' } },
-      queryStringParameters: { key: 'testKey', limit: '10' }
-    };
-    mockSend.mockResolvedValue({ Items: [{ test: 'data' }] });
+  it('空の状態でGETリクエストを投げた場合に空の配列を返すべき', async () => {
 
-    const result = await handleGetRequest(event);
-    expect(result.statusCode).toBe(200);
-    expect(JSON.parse(result.body)).toEqual([{ test: 'data' }]);
-    expect(QueryCommand).toHaveBeenCalledTimes(1);
+    const response = await axios.get(`${apiUrl}?key=testKey&limit=10`);
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.data)).toBe(true);
+    expect(response.data.length).toBe(0);
   });
 
-  it('should handle POST request', async () => {
-    const event = {
-      requestContext: { http: { method: 'POST' } },
-      body: JSON.stringify({ key: 'testKey', data: 'testData' })
-    };
-    mockSend.mockResolvedValue({});
+  it('データを追加した後にGETリクエストを投げた場合にデータを返すべき', async () => {
+    // データを追加
+    await axios.post(apiUrl, { key: 'testKey', data: 'testData' });
 
-    const result = await handlePostRequest(event);
-    expect(result.statusCode).toBe(200);
-    expect(JSON.parse(result.body)).toEqual({ message: 'Item created successfully' });
-    expect(PutCommand).toHaveBeenCalledTimes(1);
+    // 追加したデータを取得
+    const response = await axios.get(`${apiUrl}?key=testKey&limit=10`);
+    expect(response.status).toBe(200);
+    expect(response.data).toEqual(expect.arrayContaining([expect.objectContaining({ data: 'testData', readable: '*', owner: 'anonymous' })]));
   });
 
-  it('should handle DELETE request', async () => {
-    const event = {
-      requestContext: { http: { method: 'DELETE' } },
-      queryStringParameters: { key: 'testKey', created: '2024-02-01T00:00:00.000Z' }
-    };
-    mockSend.mockResolvedValue({});
+  it('データが存在する状態で削除を行うとDB内のデータが削除されるべき', async () => {
+    // データを削除
+    await axios.delete(apiUrl, {
+      data: { key: 'testKey' },
+      headers: { SecretToken: `${secretToken}` }
+    });
 
-    const result = await handleDeleteRequest(event);
-    expect(result.statusCode).toBe(200);
-    expect(JSON.parse(result.body)).toEqual({ message: 'Item deleted successfully' });
-    expect(DeleteCommand).toHaveBeenCalledTimes(1);
+    // 削除後のデータを取得
+    const response = await axios.get(`${apiUrl}?key=testKey&limit=10`);
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.data)).toBe(true);
+    expect(response.data.length).toBe(0);
   });
-
-  // it('should handle errors', async () => {
-  //   const event = { requestContext: { http: { method: 'UNKNOWN' } } };
-  //   const result = await handler(event);
-  //   expect(result.statusCode).toBe(500);
-  // });
 });
