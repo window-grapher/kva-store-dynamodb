@@ -2,6 +2,10 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 
+// Set the name of the DynamoDB table
+const branchName = process.env.BRANCH_NAME;
+const tableName = `keyValueArrayStoreTable-${branchName}`;
+
 // Create an instance of the DynamoDB client
 const dynamoDBClient = new DynamoDBClient({});
 const dynamoDB = DynamoDBDocumentClient.from(dynamoDBClient);
@@ -40,7 +44,7 @@ async function handleGetRequest(event) {
   }
 
   const params = {
-    TableName: 'keyValueArrayStoreTable',
+    TableName: tableName,
     KeyConditionExpression: '#key = :keyValue',
     ExpressionAttributeNames: { '#key': 'key' },
     ExpressionAttributeValues: { ':keyValue': keyParam },
@@ -61,7 +65,7 @@ async function handlePostRequest(event) {
   const created = new Date().toISOString(); // Get current date-time in ISO 8601 format
 
   const newItem = {
-    TableName: 'keyValueArrayStoreTable',
+    TableName: tableName,
     Item: {
       key,
       readable,
@@ -85,7 +89,7 @@ async function handleDeleteRequest(event) {
   const { key, created } = event.queryStringParameters;
 
   const params = {
-    TableName: 'keyValueArrayStoreTable',
+    TableName: tableName,
     Key: { key, created },
   };
 

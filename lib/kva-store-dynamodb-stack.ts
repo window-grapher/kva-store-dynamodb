@@ -40,6 +40,9 @@ export class KvaStoreDynamodbStack extends cdk.Stack {
       code: lambda.Code.fromAsset('lambda/functions'),
       handler: 'index.handler',
       functionName: functionName, // 関数名に環境名を含める
+      environment: {
+        BRANCH_NAME: props.envName, // ここでブランチ名を設定
+      }
       // その他の設定...
     });
     // 関数URLの有効化
