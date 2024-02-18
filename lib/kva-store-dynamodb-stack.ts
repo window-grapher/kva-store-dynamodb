@@ -25,7 +25,7 @@ export class KvaStoreDynamodbStack extends cdk.Stack {
       // その他の設定...
     });
     // ローカルセカンダリインデックスの追加
-    const secondaryIndexes = ['readable', 'owner', 'path', 'data', 'id'];
+    const secondaryIndexes = ['readable', 'owner', 'id'];
     for (const indexName of secondaryIndexes) {
       table.addLocalSecondaryIndex({
         indexName: `${indexName}Index`,
