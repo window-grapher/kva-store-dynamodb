@@ -1,0 +1,35 @@
+name: Deploy to AWS with CDK
+
+on:
+  push:
+    branches:
+      - production
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Set environment
+      id: set_env
+      run: |
+        if [[ $GITHUB_REF == 'refs/heads/production' ]]; then
+          echo "ENVIRONMENT=production" >> $GITHUB_ENV
+        else
+          echo "ENVIRONMENT=staging" >> $GITHUB_ENV
+        fi
+
+    - name: Deploy with CDK
+      run: npx cdk deploy --all --require-approval never
+      env:
+        ENVIRONMENT: ${{ env.ENVIRONMENT }}

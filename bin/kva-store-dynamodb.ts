@@ -3,6 +3,8 @@ import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import { KvaStoreDynamodbStack } from '../lib/kva-store-dynamodb-stack';
 
+const env = process.env.ENVIRONMENT || 'staging'; // 環境変数から環境を取得、デフォルトは 'stg'
+
 const app = new cdk.App();
 new KvaStoreDynamodbStack(app, 'KvaStoreDynamodbStack', {
   /* If you don't specify 'env', this stack will be environment-agnostic.
@@ -18,4 +20,8 @@ new KvaStoreDynamodbStack(app, 'KvaStoreDynamodbStack', {
   // env: { account: '123456789012', region: 'us-east-1' },
 
   /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
+  env: {
+    region: 'ap-northeast-1',
+  },
+  stackName: `KvaStoreDynamodbStack-${env}`,
 });
