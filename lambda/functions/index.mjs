@@ -1,148 +1,108 @@
-// DynamoDBクライアントのインポート
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb'
+// Import DynamoDB client and commands
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 
-// DynamoDBクライアントのインスタンスを作成
-const dynamoDBClient = new DynamoDBClient({})
-const dynamoDB = DynamoDBDocumentClient.from(dynamoDBClient)
+// Create an instance of the DynamoDB client
+const dynamoDBClient = new DynamoDBClient({});
+const dynamoDB = DynamoDBDocumentClient.from(dynamoDBClient);
 
+// Handler for incoming requests
 export const handler = async (event) => {
-  const httpMethod = event.requestContext.http.method
+  const httpMethod = event.requestContext.http.method;
   try {
-    // POSTリクエストの処理
     switch (httpMethod) {
       case 'GET':
-        return await handleGetRequest(event)
+        return await handleGetRequest(event);
       case 'POST':
-        return await handlePostRequest(event)
+        return await handlePostRequest(event);
       case 'DELETE':
-        return await handleDeleteRequest(event)
+        return await handleDeleteRequest(event);
+      default:
+        return createResponse(405, { message: 'Method Not Allowed' });
     }
   } catch (error) {
-    console.error(error)
-    return errorResponse(error.message)
+    console.error(error);
+    return createResponse(500, { message: error.message });
   }
-}
+};
 
-async function handleGetRequest (event) {
+// Handle GET requests
+async function handleGetRequest(event) {
   if (!event.queryStringParameters || !event.queryStringParameters.key) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ message: 'Key parameter is required' }),
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    }
+    return createResponse(400, { message: 'Key parameter is required' });
   }
 
-  const keyParam = event.queryStringParameters.key
-  let limitParam = parseInt(event.queryStringParameters.limit)
+  const keyParam = event.queryStringParameters.key;
+  let limitParam = parseInt(event.queryStringParameters.limit);
 
   if (isNaN(limitParam) || limitParam < 1) {
-    limitParam = undefined // またはデフォルト値を設定
+    limitParam = undefined; // or set a default value
   }
 
   const params = {
     TableName: 'keyValueArrayStoreTable',
     KeyConditionExpression: '#key = :keyValue',
-    ExpressionAttributeNames: {
-      '#key': 'key'
-    },
-    ExpressionAttributeValues: {
-      ':keyValue': keyParam
-    },
-    ScanIndexForward: false
-  }
+    ExpressionAttributeNames: { '#key': 'key' },
+    ExpressionAttributeValues: { ':keyValue': keyParam },
+    ScanIndexForward: false,
+    ...(limitParam && { Limit: limitParam }),
+  };
 
-  if (limitParam) {
-    params.Limit = limitParam
-  }
+  const command = new QueryCommand(params);
+  const data = await dynamoDB.send(command);
 
-  const command = new QueryCommand(params)
-  const data = await dynamoDB.send(command)
-
-  return {
-    statusCode: 200,
-    body: JSON.stringify(data.Items),
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  }
+  return createResponse(200, data.Items);
 }
 
-async function handlePostRequest (event) {
-  const body = JSON.parse(event.body)
-  const readable = body.readable ?? '*'
-  const owner = body.owner ?? 'anonymous'
-  const created = new Date().toISOString() // 現在の日時をISO 8601形式で取得
-  const data = body.data
+// Handle POST requests
+async function handlePostRequest(event) {
+  const body = JSON.parse(event.body);
+  const { key, readable = '*', owner = 'anonymous', data } = body;
+  const created = new Date().toISOString(); // Get current date-time in ISO 8601 format
 
   const newItem = {
     TableName: 'keyValueArrayStoreTable',
     Item: {
-      key: body.key,
+      key,
       readable,
       owner,
       created,
-      data
-    }
-  }
+      data,
+    },
+  };
 
-  const command = new PutCommand(newItem)
-  await dynamoDB.send(command)
+  await dynamoDB.send(new PutCommand(newItem));
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ message: 'Item created successfully' }),
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  }
+  return createResponse(200, { message: 'Item created successfully' });
 }
 
-async function handleDeleteRequest (event) {
-  // DELETEリクエストでidパラメータが必要です
+// Handle DELETE requests
+async function handleDeleteRequest(event) {
   if (!event.queryStringParameters || !event.queryStringParameters.key || !event.queryStringParameters.created) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ message: 'key and created parameter is required' }),
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    }
+    return createResponse(400, { message: 'Key and created parameter are required' });
   }
 
-  const key = event.queryStringParameters.key
-  const created = event.queryStringParameters.created
+  const { key, created } = event.queryStringParameters;
 
   const params = {
     TableName: 'keyValueArrayStoreTable',
-    Key: {
-      key,
-      created
-    }
-  }
+    Key: { key, created },
+  };
 
-  const command = new DeleteCommand(params)
-  await dynamoDB.send(command)
+  await dynamoDB.send(new DeleteCommand(params));
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ message: 'Item deleted successfully' }),
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  }
+  return createResponse(200, { message: 'Item deleted successfully' });
 }
 
-function errorResponse (errorMessage) {
+// Utility function for creating HTTP responses
+function createResponse(statusCode, body) {
   return {
-    statusCode: 500,
-    body: JSON.stringify({ message: errorMessage }),
+    statusCode,
+    body: JSON.stringify(body),
     headers: {
-      'Content-Type': 'application/json'
-    }
-  }
+      'Content-Type': 'application/json',
+    },
+  };
 }
 
-export { handleGetRequest, handlePostRequest, handleDeleteRequest }
+export { handleGetRequest, handlePostRequest, handleDeleteRequest };
