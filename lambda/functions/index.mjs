@@ -1,8 +1,9 @@
 // Import DynamoDB client and commands
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
-import { verify } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import axios from 'axios';
+const { verify } = jwt;
 
 // Set the name of the DynamoDB table
 const branchName = process.env.BRANCH_NAME;
@@ -174,31 +175,33 @@ export const authorize = async (event) => {
     const token = tokenStr.split(' ')[1];
 
     try {
-      // Uninitialized or expired cache of public keys, get the public keys
-      if (!cachedGooglePublicKeys) {
-        const response = await axios.get(GOOGLE_PUBLIC_KEYS_URL);
+      // if the public key cache is uninitialized, expired, or updated more than an hour ago, get the public keys
+      if (!cachedGooglePublicKeys || !lastUpdatedTime || (Date.now() - lastUpdatedTime) > 3600000) {
+        const response = await axios.get(GOOGLE_PUBLIC_KEYS_URL, {
+          headers: { 'Cache-Control': 'no-cache' }
+        });
         cachedGooglePublicKeys = response.data;
+        lastUpdatedTime = Date.now();
       }
 
-      for(const key in cachedGooglePublicKeys){
-        const publicKey = cachedGooglePublicKeys[key];
-        const JWT_SECRET_KEY = publicKey;
-        const decoded = verify(token, JWT_SECRET_KEY);
-        return {
-          status: 'ok',
-          isAuthorized: true,
-          user: decoded.user,
-          message: 'Authorized by JWT',
-        }
+      // Get the kid from the token
+      const unverifiedToken = decode(token, { complete: true });
+      const kid = unverifiedToken?.header.kid;
+
+      // Select the appropriate public key
+      const publicKey = cachedGooglePublicKeys[kid];
+      if (!publicKey) {
+        throw new Error('Invalid token: kid not recognized');
       }
 
+      // Verify the token
+      const decoded = verify(token, publicKey, { algorithms: ['RS256'] });
       return {
-        status: 'failed',
-        isAuthorized: false,
-        user: 'anonymous',
-        message: `Unauthorized: JWT is not authorized`,
-      }
-
+        status: 'ok',
+        isAuthorized: true,
+        user: decoded.user,
+        message: 'Authorized by JWT',
+      };
     } catch (error) {
       // failed to verify the token or token is expired
       return {
