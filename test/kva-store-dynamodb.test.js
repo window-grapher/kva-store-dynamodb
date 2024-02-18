@@ -52,8 +52,79 @@ describe('Get, Add, Delete by anonymous', () => {
       });
     });
 
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
     // Get the data after deleting it
-    const afterResponse = await axios.get(`${apiUrl}?key=testKey&limit=10`);
+    const afterResponse = await axios.get(`${apiUrl}?key=testKey`);
+    expect(afterResponse.status).toBe(200);
+    expect(Array.isArray(afterResponse.data)).toBe(true);
+    expect(afterResponse.data.length).toBe(0);
+  });
+});
+
+describe('Get, Add, Delete by authenticated user', () => {
+  const apiUrl = process.env.API_URL;
+  const secretToken = process.env.TEST_SECRET_TOKEN;
+
+  beforeEach(async () => {
+    const response = await axios.get(`${apiUrl}?key=authTestKey`, {
+      headers: { SecretToken: `${secretToken}` }
+    });
+    expect(response.status).toBe(200);
+
+    const items = response.data;
+
+    for (const item of items) {
+      await axios.delete(apiUrl, {
+        data: { key: item.key, created: item.created },
+        headers: { SecretToken: `${secretToken}` }
+      });
+    }
+  });
+
+  it('An empty array should be returned when a GET request is made by an authenticated user in an empty state.', async () => {
+    const response = await axios.get(`${apiUrl}?key=authTestKey&limit=100`, {
+      headers: { SecretToken: `${secretToken}` }
+    });
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.data)).toBe(true);
+    expect(response.data.length).toBe(0);
+  });
+
+  it('Data should be returned when making a GET request after an authenticated user adds data', async () => {
+    await axios.post(apiUrl, { key: 'authTestKey', data: 'authTestData' }, {
+      headers: { SecretToken: `${secretToken}` }
+    });
+
+    const response = await axios.get(`${apiUrl}?key=authTestKey`, {
+      headers: { SecretToken: `${secretToken}` }
+    });
+    const itme = response.data[0]
+    expect(response.status).toBe(200);
+    expect(itme.data).toBe('authTestData');
+    expect(itme.readable).toBe('*');
+    expect(itme.owner).toBe('testUser');
+  });
+
+  it('If an authenticated user deletes data while it exists, the data in the DB should be deleted.', async () => {
+    await axios.post(apiUrl, { key: 'authTestKey', data: 'authTestData' }, {
+      headers: { SecretToken: `${secretToken}` }
+    });
+
+    const response = await axios.get(`${apiUrl}?key=authTestKey`, {
+      headers: { SecretToken: `${secretToken}` }
+    });
+    const items = response.data;
+    for (const item of items) {
+      await axios.delete(apiUrl, {
+        data: { key: item.key, created: item.created },
+        headers: { SecretToken: `${secretToken}` }
+      });
+    }
+
+    const afterResponse = await axios.get(`${apiUrl}?key=authTestKey&limit=10`, {
+      headers: { SecretToken: `${secretToken}` }
+    });
     expect(afterResponse.status).toBe(200);
     expect(Array.isArray(afterResponse.data)).toBe(true);
     expect(afterResponse.data.length).toBe(0);
