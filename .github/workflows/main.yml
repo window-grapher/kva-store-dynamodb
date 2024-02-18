@@ -28,6 +28,9 @@ jobs:
     - name: Install dependencies
       run: npm install
 
+    - name: Install dependencies
+      run: cd lambda && cd functions && npm ci
+
     - name: Set environment
       id: set_env
       run: |

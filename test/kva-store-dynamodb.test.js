@@ -24,7 +24,7 @@ describe('Get, Add, Delete by anonymous', () => {
 
   it('空の状態でGETリクエストを投げた場合に空の配列を返すべき', async () => {
 
-    const response = await axios.get(`${apiUrl}?key=testKey&limit=10`);
+    const response = await axios.get(`${apiUrl}?key=testKey&limit=100`);
     expect(response.status).toBe(200);
     expect(Array.isArray(response.data)).toBe(true);
     expect(response.data.length).toBe(0);
