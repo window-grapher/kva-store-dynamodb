@@ -44,6 +44,5 @@ for (const key in data) {
     }
   
     const resp = await dynamoDB.send(new PutCommand(newItem));
-    console.log(resp.data);
   }
 }
