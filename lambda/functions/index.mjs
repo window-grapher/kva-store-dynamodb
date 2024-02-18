@@ -18,6 +18,7 @@ const GOOGLE_PUBLIC_KEYS_URL = 'https://www.googleapis.com/robot/v1/metadata/x50
 
 // Cache Google's public keys
 let cachedGooglePublicKeys = null;
+let lastUpdatedTime = null;
 
 // Handler for incoming requests
 export const handler = async (event) => {
@@ -45,6 +46,7 @@ async function handleGetRequest(event) {
     return createResponse(400, { message: 'Key parameter is required' });
   }
 
+  const auth = await authorize(event);
   const key = event.queryStringParameters.key;
   let limitParam = parseInt(event.queryStringParameters.limit);
   
@@ -68,13 +70,18 @@ async function handleGetRequest(event) {
   const command = new QueryCommand(params);
   const data = await dynamoDB.send(command);
 
-  return createResponse(200, data.Items ?? []);
+  const items = (data.Items ?? []).filter(item => item.readable === '*' || item.owner === auth.user || auth.role === 'admin');
+
+  return createResponse(200, items);
 }
 
 // Handle POST requests
 async function handlePostRequest(event) {
+
+  const auth = await authorize(event);
   const body = JSON.parse(event.body);
-  const { key, readable = '*', owner = 'anonymous', data } = body;
+  const { key, readable = '*', data } = body;
+  const owner = auth.user;
   const created = new Date().toISOString(); // Get current date-time in ISO 8601 format
 
   if (key.startsWith('system')) {
@@ -94,36 +101,36 @@ async function handlePostRequest(event) {
 
   await dynamoDB.send(new PutCommand(newItem));
 
-  return createResponse(200, { message: 'Item added successfully' });
+  return createResponse(200, { message: 'Item added successfully', owner: owner });
 }
 
 // Handle DELETE requests
 async function handleDeleteRequest(event) {
-
-  const auth = authorize(event);
+  const auth = await authorize(event);
   if (!auth.isAuthorized) {
-    return createResponse(401, { message: auth.message });
+    return createResponse(401, { message: 'Unauthorized' });
   }
 
   const body = JSON.parse(event.body);
-  if (!body?.key || !body?.created) {
-    return createResponse(400, { message: 'Key and created parameter are required' });
-  }
-
   const { key, created } = body;
-  
-  if (key.startsWith('system')) {
-    return createResponse(400, { message: 'Key "system*" is invalid.' });
+
+  if (key.startsWith('system') || auth.role === 'anonymous') {
+    return createResponse(400, { message: 'Key "system*" is invalid or unauthorized action.' });
   }
 
-  const params = {
-    TableName: tableName,
-    Key: { key, created },
-  };
+  if (auth.role === 'admin') {
+    await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created } }));
+    return createResponse(200, { message: 'Item deleted successfully' });
+  }
 
-  await dynamoDB.send(new DeleteCommand(params));
-
-  return createResponse(200, { message: 'Item deleted successfully' });
+  // 認証済みユーザーは自分のデータのみ削除可能
+  const item = await dynamoDB.send(new GetCommand({ TableName: tableName, Key: { key, created } }));
+  if (item.Item && item.Item.owner === auth.user) {
+    await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created } }));
+    return createResponse(200, { message: 'Item deleted successfully' });
+  } else {
+    return createResponse(403, { message: 'Forbidden: You can only delete your own items.' });
+  }
 }
 
 // Utility function for creating HTTP responses
@@ -157,11 +164,15 @@ export const authorize = async (event) => {
   
     const command = new QueryCommand(params);
     const data = await dynamoDB.send(command);
+    
+    const role = await checkUserRole(decoded.user);
+
     if (data.Items && data.Items.length === 1) {
       return {
         status: 'ok',
         isAuthorized: true,
         user: JSON.stringify(data.Items[0].data).user,
+        role: role ?? 'authenticatedUser',
         message: 'Authorized by SecretToken',
       }
     } else {
@@ -169,6 +180,7 @@ export const authorize = async (event) => {
         status: 'failed',
         isAuthorized: false,
         user: 'anonymous',
+        role: 'anonymous',
         message: 'Unauthorized: SecretToken is invalid',
       }
     }
@@ -202,10 +214,13 @@ export const authorize = async (event) => {
 
       // Verify the token
       const decoded = verify(token, publicKey, { algorithms: ['RS256'] });
+
+      const role = await checkUserRole(decoded.user);
       return {
         status: 'ok',
         isAuthorized: true,
         user: decoded.user,
+        role: role ?? 'authenticatedUser',
         message: 'Authorized by JWT',
       };
     } catch (error) {
@@ -214,6 +229,7 @@ export const authorize = async (event) => {
         status: 'failed',
         isAuthorized: false,
         user: 'anonymous',
+        role: 'anonymous',
         message: `Unauthorized: ${error.message}`,
       }
     }
@@ -224,6 +240,7 @@ export const authorize = async (event) => {
     status: 'ok',
     isAuthorized: false,
     user: 'anonymous',
+    role: 'anonymous',
     message: 'Unauthorized',
   }
 }
