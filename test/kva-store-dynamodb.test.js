@@ -13,12 +13,10 @@ describe('Get, Add, Delete by anonymous', () => {
     const items = response.data;
 
     items.forEach(async (item) => {
-      console.log({item});
       const resp = await axios.delete(apiUrl, {
         data: { key: item.key, created: item.created },
         headers: { SecretToken: `${secretToken}` }
       });
-      console.log(resp);
     });
   });
 
@@ -48,12 +46,10 @@ describe('Get, Add, Delete by anonymous', () => {
     const response = await axios.get(`${apiUrl}?key=testKey`);
     const items = response.data;
     items.forEach(async (item) => {
-      console.log({item});
       const resp = await axios.delete(apiUrl, {
         data: { key: item.key, created: item.created },
         headers: { SecretToken: `${secretToken}` }
       });
-      console.log(resp);
     });
 
     // Get the data after deleting it

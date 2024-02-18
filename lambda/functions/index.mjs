@@ -1,6 +1,6 @@
 // Import DynamoDB client and commands
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
 const { verify } = jwt;
@@ -146,8 +146,11 @@ function createResponse(statusCode, body) {
 
 // Authorize the request
 export const authorize = async (event) => {
-  const secretToken = event?.headers?.SecretToken;
-  const tokenStr = event?.headers?.Authorization;
+  
+  console.info('event:', event);
+
+  const secretToken = event?.headers?.secrettoken;
+  const tokenStr = event?.headers?.authorization;
 
   // authorized by SecretToken
   if(secretToken){
@@ -164,14 +167,15 @@ export const authorize = async (event) => {
   
     const command = new QueryCommand(params);
     const data = await dynamoDB.send(command);
+    const user = JSON.parse(data.Items[0].data).user;
     
-    const role = await checkUserRole(decoded.user);
+    const role = await checkUserRole(user);
 
     if (data.Items && data.Items.length === 1) {
       return {
         status: 'ok',
         isAuthorized: true,
-        user: JSON.stringify(data.Items[0].data).user,
+        user: user,
         role: role ?? 'authenticatedUser',
         message: 'Authorized by SecretToken',
       }
@@ -247,6 +251,8 @@ export const authorize = async (event) => {
 
 // Check user role
 export const checkUserRole = async (userId) => {
+  if(userId === 'anonymous') return null;
+  console.log('userId:', userId);
   const key = `systemUser-${userId}`;
   const limitParam = 1;
   const params = {
@@ -261,7 +267,8 @@ export const checkUserRole = async (userId) => {
   const command = new QueryCommand(params);
   const data = await dynamoDB.send(command);
   if (data.Items && data.Items.length === 1) {
-    return data.Items[0].data.role;
+    console.log(data.Items[0].data);
+    return JSON.parse(data.Items[0].data)?.role;
   }
   return null;
 }
