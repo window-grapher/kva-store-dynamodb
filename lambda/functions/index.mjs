@@ -99,6 +99,12 @@ async function handlePostRequest(event) {
 
 // Handle DELETE requests
 async function handleDeleteRequest(event) {
+
+  const auth = authorize(event);
+  if (!auth.isAuthorized) {
+    return createResponse(401, { message: auth.message });
+  }
+
   const body = JSON.parse(event.body);
   if (!body?.key || !body?.created) {
     return createResponse(400, { message: 'Key and created parameter are required' });
@@ -220,6 +226,27 @@ export const authorize = async (event) => {
     user: 'anonymous',
     message: 'Unauthorized',
   }
+}
+
+// Check user role
+export const checkUserRole = async (userId) => {
+  const key = `systemUser-${userId}`;
+  const limitParam = 1;
+  const params = {
+    TableName: tableName,
+    KeyConditionExpression: '#key = :keyValue',
+    ExpressionAttributeNames: { '#key': 'key' },
+    ExpressionAttributeValues: { ':keyValue': key },
+    ScanIndexForward: false,
+    ...(limitParam && { Limit: limitParam }),
+  };
+
+  const command = new QueryCommand(params);
+  const data = await dynamoDB.send(command);
+  if (data.Items && data.Items.length === 1) {
+    return data.Items[0].data.role;
+  }
+  return null;
 }
 
 export { handleGetRequest, handlePostRequest, handleDeleteRequest };
