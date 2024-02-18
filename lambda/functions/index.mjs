@@ -3,7 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
-const { verify } = jwt;
+const { verify, decode } = jwt;
 
 // Set the name of the DynamoDB table
 const branchName = process.env.BRANCH_NAME;
@@ -22,24 +22,36 @@ let lastUpdatedTime = null;
 
 // Handler for incoming requests
 export const handler = async (event) => {
-  const httpMethod = event.requestContext.http.method;
   try {
-    switch (httpMethod) {
-      case 'GET':
-        return await handleGetRequest(event);
-      case 'POST':
-        return await handlePostRequest(event);
-      case 'DELETE':
-        return await handleDeleteRequest(event);
-      case 'OPTIONS':
-        // Respond to CORS pre-flight request
-        return createResponse(204, {}, {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-          'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,DELETE'
-        });
-      default:
-        return createResponse(405, { message: 'Method Not Allowed' });
+    const httpMethod = event?.requestContext?.http?.method;
+    const path = event?.requestContext?.http?.path;
+    if(!httpMethod || !path) return createResponse(400, { message: 'Bad Request' });
+
+    if (path === '/auth') {
+      try {
+        return await handleAuthRequest(event);
+      } catch (error) {
+        console.error(error);
+        return createResponse(500, { message: error.message });
+      }
+    } else {
+      switch (httpMethod) {
+        case 'GET':
+          return await handleGetRequest(event);
+        case 'POST':
+          return await handlePostRequest(event);
+        case 'DELETE':
+          return await handleDeleteRequest(event);
+        case 'OPTIONS':
+          // Respond to CORS pre-flight request
+          return createResponse(204, {}, {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+            'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,DELETE'
+          });
+        default:
+          return createResponse(405, { message: 'Method Not Allowed' });
+      }
     }
   } catch (error) {
     console.error(error);
@@ -77,7 +89,7 @@ async function handleGetRequest(event) {
   const command = new QueryCommand(params);
   const data = await dynamoDB.send(command);
 
-  const items = (data.Items ?? []).filter(item => item.readable === '*' || item.owner === auth.user || auth.role === 'admin');
+  const items = (data.Items ?? []).filter(item => item.readable === '*' || (item.owner === auth.user && auth.user !== 'anonymous') || auth.role === 'admin');
 
   return createResponse(200, items);
 }
@@ -140,6 +152,23 @@ async function handleDeleteRequest(event) {
   }
 }
 
+// Handle Auth requests
+async function handleAuthRequest(event) {
+  const auth = await authorize(event);
+  if (!auth.isAuthorized) {
+    return createResponse(401, { message: 'Unauthorized' });
+  }
+
+  // Assuming the user's info and role are contained in the auth object
+  // Modify as needed to fit your user info structure
+  const userInfo = {
+    user: auth.user,
+    role: auth.role
+  };
+
+  return createResponse(200, userInfo);
+}
+
 // Utility function for creating HTTP responses with CORS enabled
 function createResponse(statusCode, body) {
   return {
@@ -157,8 +186,6 @@ function createResponse(statusCode, body) {
 // Authorize the request
 export const authorize = async (event) => {
   
-  console.info('event:', event);
-
   const secretToken = event?.headers?.secrettoken;
   const tokenStr = event?.headers?.authorization;
 
@@ -229,15 +256,16 @@ export const authorize = async (event) => {
       // Verify the token
       const decoded = verify(token, publicKey, { algorithms: ['RS256'] });
 
-      const role = await checkUserRole(decoded.user);
+      const role = await checkUserRole(decoded.email);
       return {
         status: 'ok',
         isAuthorized: true,
-        user: decoded.user,
+        user: decoded.email,
         role: role ?? 'authenticatedUser',
         message: 'Authorized by JWT',
       };
     } catch (error) {
+      console.error({error});
       // failed to verify the token or token is expired
       return {
         status: 'failed',
@@ -262,7 +290,6 @@ export const authorize = async (event) => {
 // Check user role
 export const checkUserRole = async (userId) => {
   if(userId === 'anonymous') return null;
-  console.log('userId:', userId);
   const key = `systemUser-${userId}`;
   const limitParam = 1;
   const params = {
@@ -277,7 +304,6 @@ export const checkUserRole = async (userId) => {
   const command = new QueryCommand(params);
   const data = await dynamoDB.send(command);
   if (data.Items && data.Items.length === 1) {
-    console.log(data.Items[0].data);
     return JSON.parse(data.Items[0].data)?.role;
   }
   return null;
