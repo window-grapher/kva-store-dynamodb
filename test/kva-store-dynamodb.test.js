@@ -207,6 +207,7 @@ describe('Readable field behavior', () => {
       headers: { SecretToken: `${adminSecretToken}` }
     });
     expect(adminGetResponse.data.length).toBe(1);
+    items = adminGetResponse.data;
     
     // Delete data by an admin user
     for (const item of items) {
