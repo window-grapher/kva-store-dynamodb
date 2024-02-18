@@ -133,8 +133,8 @@ function createResponse(statusCode, body) {
 
 // Authorize the request
 export const authorize = async (event) => {
-  const secretToken = event.headers.SecretToken;
-  const tokenStr = event.headers.Authorization;
+  const secretToken = event?.headers?.SecretToken;
+  const tokenStr = event?.headers?.Authorization;
 
   // authorized by SecretToken
   if(secretToken){
