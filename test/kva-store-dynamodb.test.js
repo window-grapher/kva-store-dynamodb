@@ -170,12 +170,17 @@ describe('Readable field behavior', () => {
     // Delete data by an anonymous user
     let cleanupResponse = await axios.get(`${apiUrl}?key=${testKeyForReadable}`);
     let items = cleanupResponse.data;
-    // for (const item of items) {
-    //   await axios.delete(apiUrl, {
-    //     data: { key: item.key, created: item.created }
-    //   });
-    // }
-    // await new Promise((resolve) => setTimeout(resolve, 1000));
+    for (const item of items) {
+      try {
+        const res = await axios.delete(apiUrl, {
+          data: { key: item.key, created: item.created }
+        });
+        expect(res.status).toBe(401);  
+      } catch (error) {
+        expect(error.response.status).toBe(401);
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // Get data as an admin user
     let authenticatedGetResponse = await axios.get(`${apiUrl}?key=${testKeyForReadable}`, {
@@ -184,13 +189,18 @@ describe('Readable field behavior', () => {
     expect(authenticatedGetResponse.data.length).toBe(1);
 
     // Delete data by an authenticated user
-    // for (const item of items) {
-    //   await axios.delete(apiUrl, {
-    //     data: { key: item.key, created: item.created },
-    //     headers: { SecretToken: `${secretToken}` }
-    //   });
-    // }
-    // await new Promise((resolve) => setTimeout(resolve, 1000));
+    for (const item of items) {
+      try {
+        const res = await axios.delete(apiUrl, {
+          data: { key: item.key, created: item.created },
+          headers: { SecretToken: `${secretToken}` }
+        });
+        expect(res.status).toBe(403);
+      } catch (error) {
+        expect(error.response.status).toBe(403);
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // Get data as an admin user
     let adminGetResponse = await axios.get(`${apiUrl}?key=${testKeyForReadable}`, {
@@ -213,7 +223,7 @@ describe('Readable field behavior', () => {
       headers: { SecretToken: `${adminSecretToken}` }
     });
     expect(adminGetResponse.data.length).toBe(0);
-  });
+  }, 100000);
 
   it('Data added by an authenticated user should be accessible only when readable matches the condition', async () => {
     // Add data as an authenticated user
