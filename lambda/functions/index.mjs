@@ -3,7 +3,6 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
-const { verify, decode } = jwt;
 
 // Set the name of the DynamoDB table
 const branchName = process.env.BRANCH_NAME;
@@ -106,6 +105,10 @@ async function handlePostRequest(event) {
   if (key.startsWith('system')) {
     return createResponse(400, { message: 'Key "system*" is invalid.' });
   }
+  if (key.startsWith(`privateKey`) && !key.startsWith(`privateKey-${auth.user}`)) {
+    // Only authenticated users can add private data
+    return createResponse(400, { message: `Only xxx can add "privateKey-xxx".` });
+  }
 
   const newItem = {
     TableName: tableName,
@@ -142,7 +145,7 @@ async function handleDeleteRequest(event) {
     return createResponse(200, { message: 'Item deleted successfully' });
   }
 
-  // 認証済みユーザーは自分のデータのみ削除可能
+  // Only the owner of the item can delete it
   const item = await dynamoDB.send(new GetCommand({ TableName: tableName, Key: { key, created } }));
   if (item.Item && item.Item.owner === auth.user) {
     await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created } }));
@@ -244,7 +247,7 @@ export const authorize = async (event) => {
       }
 
       // Get the kid from the token
-      const unverifiedToken = decode(token, { complete: true });
+      const unverifiedToken = jwt.decode(token, { complete: true });
       const kid = unverifiedToken?.header.kid;
 
       // Select the appropriate public key
@@ -254,7 +257,7 @@ export const authorize = async (event) => {
       }
 
       // Verify the token
-      const decoded = verify(token, publicKey, { algorithms: ['RS256'] });
+      const decoded = jwt.verify(token, publicKey, { algorithms: ['RS256'] });
 
       const role = await checkUserRole(decoded.email);
       return {
