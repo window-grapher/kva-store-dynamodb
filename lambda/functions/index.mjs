@@ -107,7 +107,7 @@ async function handlePostRequest(event) {
   }
   if (key.startsWith(`privateKey`) && !key.startsWith(`privateKey-${auth.user}`)) {
     // Only authenticated users can add private data
-    return createResponse(400, { message: `Only xxx can add "privateKey-xxx".` });
+    return createResponse(403, { message: `Only xxx can add "privateKey-xxx".` });
   }
 
   const newItem = {

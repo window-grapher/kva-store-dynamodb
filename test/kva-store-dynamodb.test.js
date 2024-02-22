@@ -266,3 +266,26 @@ describe('Readable field behavior', () => {
     }
   });
 });
+
+describe('private key behavior', () => {
+  it('Data added by an authenticated user should be accessible only when the private key matches the condition', async () => {
+    const testKeyForPrivate = 'privateKey-mail@takoyaki3.com';
+    // Add data as an authenticated user
+    const resp = await axios.post(apiUrl, { key: testKeyForPrivate, data: 'testDataForPrivate', readable: 'mail@takoyaki3.com' }, {
+      headers: { SecretToken: `${adminSecretToken}` }
+    });
+    expect(resp.status).toBe(200);
+  });
+  it('Only xxx user can be add "privateKey-xxx"', async () => {
+    const testKeyForPrivate = 'privateKey-mail@takoyaki3.com';
+    // Add data as an authenticated user
+    try {
+      const response = await axios.post(apiUrl, { key: testKeyForPrivate, data: 'testDataForPrivate', readable: 'mail@takoyaki3.com' }, {
+        headers: { SecretToken: `${secretToken}` }
+      });
+      expect(response.status).toBe(403);
+    } catch (error) {
+      expect(error.response.status).toBe(403);
+    }
+  });
+});
