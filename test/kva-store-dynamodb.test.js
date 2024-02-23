@@ -291,17 +291,38 @@ describe('private key behavior', () => {
 });
 
 describe('set start and end', () => {
-  it('Data should be returned when making a GET request after adding data', async () => {
+  it('start and end', async () => {
     const testKey = 'testKeyForStartAndEnd';
-    const testData = 'testDataForStartAndEnd';
-    // Add data
-    await axios.post(apiUrl, { key: testKey, data: testData });
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // Get added data
-    const response = await axios.get(`${apiUrl}?key=${testKey}&start=0&end=100`);
+    const response = await axios.get(`${apiUrl}?key=${testKey}&start=2024-01-02&end=2024-01-04`);
     expect(response.status).toBe(200);
-    expect(response.data).toEqual(expect.arrayContaining([expect.objectContaining({ data: testData, readable: '*', owner: 'anonymous' })]));
+    expect(response.data.length).toEqual(2);
+    expect(response.data[0].created).toBe('2024-01-03T00:00:00.000Z');
+    expect(response.data[1].created).toBe('2024-01-02T00:00:00.000Z');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  });
+  it('start only', async () => {
+    const testKey = 'testKeyForStartAndEnd';
+
+    // Get added data
+    const response = await axios.get(`${apiUrl}?key=${testKey}&start=2024-01-02`);
+    expect(response.status).toBe(200);
+    expect(response.data.length).toEqual(3);
+    expect(response.data[0].created).toBe('2024-01-04T00:00:00.000Z');
+    expect(response.data[1].created).toBe('2024-01-03T00:00:00.000Z');
+    expect(response.data[2].created).toBe('2024-01-02T00:00:00.000Z');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  });
+  it('end only', async () => {
+    const testKey = 'testKeyForStartAndEnd';
+
+    // Get added data
+    const response = await axios.get(`${apiUrl}?key=${testKey}&end=2024-01-04`);
+    expect(response.status).toBe(200);
+    expect(response.data.length).toEqual(3);
+    expect(response.data[0].created).toBe('2024-01-03T00:00:00.000Z');
+    expect(response.data[1].created).toBe('2024-01-02T00:00:00.000Z');
+    expect(response.data[2].created).toBe('2024-01-01T00:00:00.000Z');
   });
 });

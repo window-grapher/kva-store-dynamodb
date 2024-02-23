@@ -82,10 +82,13 @@ async function handleGetRequest(event) {
 
   const params = {
     TableName: tableName,
-    KeyConditionExpression: '#key = :keyValue' + (start && end ? ' AND #created BETWEEN :startDate AND :endDate' : ''),
+    KeyConditionExpression: '#key = :keyValue' + 
+      (start && end ? ' AND #created BETWEEN :startDate AND :endDate' : 
+       start ? ' AND #created >= :startDate' : 
+       end ? ' AND #created <= :endDate' : ''),
     ExpressionAttributeNames: { 
       '#key': 'key',
-      ...(start && end && { '#created': 'created' })
+      ...(start || end ? { '#created': 'created' } : {})
     },
     ExpressionAttributeValues: { 
       ':keyValue': key,
@@ -94,7 +97,7 @@ async function handleGetRequest(event) {
     },
     ScanIndexForward: false,
     ...(limitParam && { Limit: limitParam }),
-  };
+  };  
 
   const command = new QueryCommand(params);
   const data = await dynamoDB.send(command);

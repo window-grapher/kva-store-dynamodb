@@ -56,7 +56,35 @@ export const handler = async (event) => {
         owner: 'system',
         created: new Date().toISOString(),
         data: '{"role":"admin"}',
-      }
+      },
+      {
+        key: `testKeyForStartAndEnd`,
+        readable: '*',
+        owner: 'anonymous',
+        created: '2024-01-01T00:00:00.000Z',
+        data: '2022-01-01T00:00:00.000Z',
+      },
+      {
+        key: `testKeyForStartAndEnd`,
+        readable: '*',
+        owner: 'anonymous',
+        created: '2024-01-02T00:00:00.000Z',
+        data: '2022-01-01T00:00:00.000Z',
+      },
+      {
+        key: `testKeyForStartAndEnd`,
+        readable: '*',
+        owner: 'anonymous',
+        created: '2024-01-03T00:00:00.000Z',
+        data: '2022-01-01T00:00:00.000Z',
+      },
+      {
+        key: `testKeyForStartAndEnd`,
+        readable: '*',
+        owner: 'anonymous',
+        created: '2024-01-04T00:00:00.000Z',
+        data: '2022-01-01T00:00:00.000Z',
+      },
     ];
 
     // Put items into the table
