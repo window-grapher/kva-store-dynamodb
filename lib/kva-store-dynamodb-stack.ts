@@ -3,67 +3,91 @@ import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import { env } from 'process';
+
+const adminUserSecretToken : string = env.ADMIN_USER_SECRET_TOKEN as string;
+const authenticatedUserSecretToken : string = env.AUTHENTICATED_USER_SECRET_TOKEN as string;
 
 interface KvaStoreDynamodbStackProps extends cdk.StackProps {
-  envName: string; // 環境名を示す新しいプロパティ
+  envName: string; // e.g. 'staging', 'production'
 }
 
 export class KvaStoreDynamodbStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: KvaStoreDynamodbStackProps) {
     super(scope, id, props);
 
-    // リソース名に環境名を含める
+    // e.g. `keyValueArrayStoreTable-staging`
     const tableName = `keyValueArrayStoreTable-${props.envName}`;
     const functionName = `keyValueArrayStoreHandler-${props.envName}`;
-    const bucketName = `keyvaluearraystorebucket-${props.envName.toLowerCase()}`; // S3バケット名は小文字のみ
+    const bucketName = `keyvaluearraystorebucket-${props.envName.toLowerCase()}`; // S3 bucket name is case-insensitive
 
-    // DynamoDBテーブルの定義
+    // DynamoDB table definition
     const table = new dynamodb.Table(this, 'keyValueArrayStoreTable', {
       partitionKey: { name: 'key', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'created', type: dynamodb.AttributeType.STRING },
       tableName: tableName,
-      // その他の設定...
+      // DynamoDB table settings...
     });
-    // ローカルセカンダリインデックスの追加
+
+    // Add local secondary indexes
     const secondaryIndexes = ['readable', 'owner', 'id'];
     for (const indexName of secondaryIndexes) {
       table.addLocalSecondaryIndex({
         indexName: `${indexName}Index`,
         sortKey: { name: indexName, type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL, // 必要に応じて変更
+        projectionType: dynamodb.ProjectionType.ALL,
       });
     }
     
-    // Lambda関数の定義
+    // Main handler function
     const myFunction = new lambda.Function(this, 'keyValueArrayStoreHandler', {
       runtime: lambda.Runtime.NODEJS_20_X,
       code: lambda.Code.fromAsset('lambda/functions'),
       handler: 'index.handler',
-      functionName: functionName, // 関数名に環境名を含める
+      functionName: functionName,
       environment: {
-        BRANCH_NAME: props.envName, // ここでブランチ名を設定
+        BRANCH_NAME: props.envName,
       }
-      // その他の設定...
+      // lambda function settings...
     });
-    // 関数URLの有効化
+
+    // Function URL activation
     myFunction.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE, // 認証のタイプを設定
-      // その他の設定...
+      authType: lambda.FunctionUrlAuthType.NONE,
+      // function URL settings...
     });
 
-    // DynamoDBテーブルへの権限付与
-    table.grantReadWriteData(myFunction);
+    const functions = [myFunction];
 
-    // S3バケットの定義
+    // Staging test data initialization for DynamoDB
+    if (props.envName === 'staging') {      
+      const initFunction = new lambda.Function(this, 'keyValueArrayStoreTestDataInitHandler', {
+        runtime: lambda.Runtime.NODEJS_20_X,
+        code: lambda.Code.fromAsset('lambda/functions'),
+        handler: 'init.handler',
+        functionName: 'keyValueArrayStoreTestDataInitHandler',
+        environment: {
+          BRANCH_NAME: props.envName,
+          ADMIN_USER_SECRET_TOKEN: adminUserSecretToken,
+          AUTHENTICATED_USER_SECRET_TOKEN: authenticatedUserSecretToken,
+        }
+      });
+      functions.push(initFunction);
+    }
+
+    // Create an S3 bucket
     const bucket = new s3.Bucket(this, 'keyValueArrayStoreBucket', {
-      bucketName: bucketName, // バケット名に環境名を含める
-      // バケット設定...
+      bucketName: bucketName,
+      // Bucket settings...
     });
+    
+    // Add permissions
+    for (const func of functions) {
+      // DynamoDB table permission
+      table.grantReadWriteData(func);
 
-    // DynamoDBテーブルへの権限付与
-    table.grantReadWriteData(myFunction);
-
-    // S3バケットへの権限付与
-    bucket.grantReadWrite(myFunction);
+      // S3 bucket permission
+      bucket.grantReadWrite(func);
+    }
   }
 }

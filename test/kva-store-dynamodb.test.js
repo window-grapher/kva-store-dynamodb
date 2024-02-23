@@ -3,8 +3,8 @@ import axios from 'axios';
 require('dotenv').config();
 
 const apiUrl = process.env.API_URL;
-const secretToken = process.env.TEST_SECRET_TOKEN;
-const adminSecretToken = process.env.SECRET_TOKEN;
+const secretToken = process.env.AUTHENTICATED_USER_SECRET_TOKEN;
+const adminSecretToken = process.env.ADMIN_USER_SECRET_TOKEN;
 
 describe('Get, Add, Delete by anonymous', () => {
 
@@ -287,5 +287,21 @@ describe('private key behavior', () => {
     } catch (error) {
       expect(error.response.status).toBe(403);
     }
+  });
+});
+
+describe('set start and end', () => {
+  it('Data should be returned when making a GET request after adding data', async () => {
+    const testKey = 'testKeyForStartAndEnd';
+    const testData = 'testDataForStartAndEnd';
+    // Add data
+    await axios.post(apiUrl, { key: testKey, data: testData });
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Get added data
+    const response = await axios.get(`${apiUrl}?key=${testKey}&start=0&end=100`);
+    expect(response.status).toBe(200);
+    expect(response.data).toEqual(expect.arrayContaining([expect.objectContaining({ data: testData, readable: '*', owner: 'anonymous' })]));
   });
 });

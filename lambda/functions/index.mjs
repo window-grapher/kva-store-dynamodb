@@ -68,6 +68,10 @@ async function handleGetRequest(event) {
   const key = event.queryStringParameters.key;
   let limitParam = parseInt(event.queryStringParameters.limit);
   
+  // Get startDate and endDate
+  const start = event.queryStringParameters.start;
+  const end = event.queryStringParameters.end;
+
   if (key.startsWith('system')) {
     return createResponse(400, { message: 'Key "system*" is invalid.' });
   }
@@ -78,9 +82,16 @@ async function handleGetRequest(event) {
 
   const params = {
     TableName: tableName,
-    KeyConditionExpression: '#key = :keyValue',
-    ExpressionAttributeNames: { '#key': 'key' },
-    ExpressionAttributeValues: { ':keyValue': key },
+    KeyConditionExpression: '#key = :keyValue' + (start && end ? ' AND #created BETWEEN :startDate AND :endDate' : ''),
+    ExpressionAttributeNames: { 
+      '#key': 'key',
+      ...(start && end && { '#created': 'created' })
+    },
+    ExpressionAttributeValues: { 
+      ':keyValue': key,
+      ...(start && { ':startDate': start }),
+      ...(end && { ':endDate': end })
+    },
     ScanIndexForward: false,
     ...(limitParam && { Limit: limitParam }),
   };
