@@ -12,7 +12,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    # 環境変数の設定
+    # Set up AWS credentials
     - name: Set up AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
@@ -44,3 +44,5 @@ jobs:
       run: npx cdk deploy --all --require-approval never
       env:
         ENVIRONMENT: ${{ env.ENVIRONMENT }}
+        ADMIN_USER_SECRET_TOKEN: ${{ secrets.ADMIN_USER_SECRET_TOKEN }}
+        AUTHENTICATED_USER_SECRET_TOKEN: ${{ secrets.AUTHENTICATED_USER_SECRET_TOKEN }}
