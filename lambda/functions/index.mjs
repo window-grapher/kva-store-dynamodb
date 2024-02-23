@@ -80,24 +80,40 @@ async function handleGetRequest(event) {
     limitParam = 100; // or set a default value
   }
 
-  const params = {
-    TableName: tableName,
-    KeyConditionExpression: '#key = :keyValue' + 
-      (start && end ? ' AND #created BETWEEN :startDate AND :endDate' : 
-       start ? ' AND #created >= :startDate' : 
-       end ? ' AND #created <= :endDate' : ''),
-    ExpressionAttributeNames: { 
-      '#key': 'key',
-      ...(start || end ? { '#created': 'created' } : {})
-    },
-    ExpressionAttributeValues: { 
-      ':keyValue': key,
-      ...(start && { ':startDate': start }),
-      ...(end && { ':endDate': end })
-    },
-    ScanIndexForward: false,
-    ...(limitParam && { Limit: limitParam }),
-  };  
+  const id = event.queryStringParameters.id;
+  
+  let params = {}
+
+  if (id) {
+    params = {
+      TableName: tableName,
+      IndexName: 'idIndex',
+      KeyConditionExpression: '#key = :keyValue AND #id = :idValue',
+      ExpressionAttributeNames: { '#key': 'key', '#id': 'id' },
+      ExpressionAttributeValues: { ':keyValue': key, ':idValue': id },
+      ScanIndexForward: false,
+      ...(limitParam && { Limit: limitParam }),
+    };
+  } else {
+    params = {
+      TableName: tableName,
+      KeyConditionExpression: '#key = :keyValue' + 
+        (start && end ? ' AND #created BETWEEN :startDate AND :endDate' : 
+         start ? ' AND #created >= :startDate' : 
+         end ? ' AND #created <= :endDate' : ''),
+      ExpressionAttributeNames: { 
+        '#key': 'key',
+        ...(start || end ? { '#created': 'created' } : {})
+      },
+      ExpressionAttributeValues: { 
+        ':keyValue': key,
+        ...(start && { ':startDate': start }),
+        ...(end && { ':endDate': end })
+      },
+      ScanIndexForward: false,
+      ...(limitParam && { Limit: limitParam }),
+    };
+  }
 
   const command = new QueryCommand(params);
   const data = await dynamoDB.send(command);
@@ -112,7 +128,7 @@ async function handlePostRequest(event) {
 
   const auth = await authorize(event);
   const body = JSON.parse(event.body);
-  const { key, readable = '*', data } = body;
+  const { key, readable = '*', data, id } = body;
   const owner = auth.user;
   const created = new Date().toISOString(); // Get current date-time in ISO 8601 format
 
@@ -132,6 +148,7 @@ async function handlePostRequest(event) {
       owner,
       created,
       data,
+      id,
     },
   };
 
@@ -148,24 +165,45 @@ async function handleDeleteRequest(event) {
   }
 
   const body = JSON.parse(event.body);
-  const { key, created } = body;
+  const { key, created, id } = body;
 
   if (key.startsWith('system') || auth.role === 'anonymous') {
     return createResponse(400, { message: 'Key "system*" is invalid or unauthorized action.' });
   }
 
-  if (auth.role === 'admin') {
-    await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created } }));
-    return createResponse(200, { message: 'Item deleted successfully' });
-  }
-
-  // Only the owner of the item can delete it
-  const item = await dynamoDB.send(new GetCommand({ TableName: tableName, Key: { key, created } }));
-  if (item.Item && item.Item.owner === auth.user) {
-    await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created } }));
+  if(id){
+    // Only the owner of the item can delete it
+    const queryCommand = new QueryCommand({
+      TableName: tableName,
+      IndexName: 'idIndex',
+      KeyConditionExpression: '#key = :keyValue AND #id = :idValue',
+      ExpressionAttributeNames: {
+        '#key': 'key',
+        '#id': 'id',
+      },
+      ExpressionAttributeValues: {
+        ':keyValue': key,
+        ':idValue': id
+      },
+    });
+    const queryResult = await dynamoDB.send(queryCommand);
+    const items = queryResult.Items.filter(item => { return item.owner === auth.user || auth.role === 'admin'});
+    if(items.length === 0){
+      return createResponse(403, { message: 'Forbidden: You can only delete your own items.' });
+    }
+    for(const item of items){
+      await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created: item.created } }));
+    }
     return createResponse(200, { message: 'Item deleted successfully' });
   } else {
-    return createResponse(403, { message: 'Forbidden: You can only delete your own items.' });
+    // Only the owner of the item can delete it
+    const item = await dynamoDB.send(new GetCommand({ TableName: tableName, Key: { key, created } }));
+    if (item.Item && (item.Item.owner === auth.user || auth.role === 'admin')) {
+      await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created } }));
+      return createResponse(200, { message: 'Item deleted successfully' });
+    } else {
+      return createResponse(403, { message: 'Forbidden: You can only delete your own items.' });
+    }
   }
 }
 
@@ -206,41 +244,48 @@ export const authorize = async (event) => {
   const secretToken = event?.headers?.secrettoken;
   const tokenStr = event?.headers?.authorization;
 
+  let errorMessage = '';
+
   // authorized by SecretToken
   if(secretToken){
-    const key = 'systemSecretToken-' + secretToken;
-    const limitParam = 1;
-    const params = {
-      TableName: tableName,
-      KeyConditionExpression: '#key = :keyValue',
-      ExpressionAttributeNames: { '#key': 'key' },
-      ExpressionAttributeValues: { ':keyValue': key },
-      ScanIndexForward: false,
-      ...(limitParam && { Limit: limitParam }),
-    };
-  
-    const command = new QueryCommand(params);
-    const data = await dynamoDB.send(command);
-    const user = JSON.parse(data.Items[0].data).user;
+    try {
+      const key = 'systemSecretToken-' + secretToken;
+      const limitParam = 1;
+      const params = {
+        TableName: tableName,
+        KeyConditionExpression: '#key = :keyValue',
+        ExpressionAttributeNames: { '#key': 'key' },
+        ExpressionAttributeValues: { ':keyValue': key },
+        ScanIndexForward: false,
+        ...(limitParam && { Limit: limitParam }),
+      };
     
-    const role = await checkUserRole(user);
+      const command = new QueryCommand(params);
+      const data = await dynamoDB.send(command);
+      const user = JSON.parse(data.Items[0].data).user;
+      
+      const role = await checkUserRole(user);
 
-    if (data.Items && data.Items.length === 1) {
-      return {
-        status: 'ok',
-        isAuthorized: true,
-        user: user,
-        role: role ?? 'authenticatedUser',
-        message: 'Authorized by SecretToken',
+      if (data.Items && data.Items.length === 1) {
+        return {
+          status: 'ok',
+          isAuthorized: true,
+          user: user,
+          role: role ?? 'authenticatedUser',
+          message: 'Authorized by SecretToken',
+        }
       }
-    } else {
-      return {
-        status: 'failed',
-        isAuthorized: false,
-        user: 'anonymous',
-        role: 'anonymous',
-        message: 'Unauthorized: SecretToken is invalid',
-      }
+      errorMessage = 'Unauthorized: SecretToken is invalid';
+    } catch (error) {
+      console.error({error});
+      errorMessage = `Unauthorized: ${error.message}`;
+    }
+    return {
+      status: 'failed',
+      isAuthorized: false,
+      user: 'anonymous',
+      role: 'anonymous',
+      message: errorMessage,
     }
   }
 
@@ -320,7 +365,7 @@ export const checkUserRole = async (userId) => {
 
   const command = new QueryCommand(params);
   const data = await dynamoDB.send(command);
-  if (data.Items && data.Items.length === 1) {
+  if (data.Items && data.Items.length === 1 && data.Items[0].data) {
     return JSON.parse(data.Items[0].data)?.role;
   }
   return null;

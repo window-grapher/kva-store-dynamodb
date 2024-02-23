@@ -1,4 +1,5 @@
 import axios from 'axios';
+import exp from 'constants';
 
 require('dotenv').config();
 
@@ -324,5 +325,81 @@ describe('set start and end', () => {
     expect(response.data[0].created).toBe('2024-01-03T00:00:00.000Z');
     expect(response.data[1].created).toBe('2024-01-02T00:00:00.000Z');
     expect(response.data[2].created).toBe('2024-01-01T00:00:00.000Z');
+  });
+});
+
+describe('authentication', () => {
+  it('Authentication GET', async () => {
+    const resp = await axios.get(`${apiUrl}/auth`, { headers: { SecretToken: `${secretToken}` } });
+    expect(resp.status).toBe(200);
+  });
+  it('Authentication POST', async () => {
+    const resp = await axios.post(`${apiUrl}/auth`, {}, { headers: { SecretToken: `${secretToken}` } });
+    expect(resp.status).toBe(200);
+  });
+  it('Authentication DELETE', async () => {
+    const resp = await axios.delete(`${apiUrl}/auth`, { headers: { SecretToken: `${adminSecretToken}` } });
+    expect(resp.status).toBe(200);
+  });
+  it('Authentication error', async () => {
+    try {
+      const resp = await axios.delete(`${apiUrl}/auth`, { headers: { SecretToken: `${secretToken}error` } });
+      expect(resp.status).toBe(401);
+    } catch (error) {
+      expect(error.response.status).toBe(401);
+    }
+  });
+});
+
+describe('set id', () => {
+  it('add with id', async () => {
+    const testKey = 'testKeyForId';
+    const testId = 'testId';
+
+    // First, delete the data if it exists
+    try {
+      await axios.delete(`${apiUrl}`, { data: { key: testKey, id: testId }, headers: { SecretToken: `${adminSecretToken}` } });
+    } catch (error) {
+      console.log(error);
+    }
+
+    // Add data
+    const respPost = await axios.post(`${apiUrl}`, {key: testKey, id: testId, data: 'testData'});
+    expect(respPost.status).toBe(200);
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Get added data
+    const respGet = await axios.get(`${apiUrl}?key=${testKey}&id=${testId}`);
+    expect(respGet.status).toBe(200);
+    expect(respGet.data.length).toEqual(1);
+    expect(respGet.data[0].data).toBe('testData');
+
+    // Only owner or admin can delete
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const respAnonymousDelete = await axios.delete(`${apiUrl}`, { data: { key: testKey, id: testId } });
+      expect(respAnonymousDelete.status).toBe(401);        
+    } catch (error) {
+      expect(error.response.status).toBe(401);
+    }
+    try {
+      const respAuthenticatedDelete = await axios.delete(`${apiUrl}`, { data: { key: testKey, id: testId }, headers: { SecretToken: `${secretToken}` } });
+      expect(respAuthenticatedDelete.status).toBe(403);
+    } catch (error) {
+      expect(error.response.data.message).toBe('Forbidden: You can only delete your own items.')
+      expect(error.response.status).toBe(403);
+    }
+
+    // Delete the data
+    const respDelete = await axios.delete(`${apiUrl}`, { data: { key: testKey, id: testId }, headers: { SecretToken: `${adminSecretToken}` } });
+    expect(respDelete.status).toBe(200);
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Get the data after deleting it
+    const afterResponse = await axios.get(`${apiUrl}?key=${testKey}&id=${testId}`);
+    expect(afterResponse.status).toBe(200);
+    expect(afterResponse.data.length).toBe(0);
   });
 });
