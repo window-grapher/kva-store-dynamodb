@@ -360,7 +360,6 @@ describe('set id', () => {
     try {
       await axios.delete(`${apiUrl}`, { data: { key: testKey, id: testId }, headers: { SecretToken: `${adminSecretToken}` } });
     } catch (error) {
-      console.log(error);
     }
 
     // Add data
@@ -375,8 +374,38 @@ describe('set id', () => {
     expect(respGet.data.length).toEqual(1);
     expect(respGet.data[0].data).toBe('testData');
 
-    // Only owner or admin can delete
+    // Update the data
+    const respUpdate = await axios.post(`${apiUrl}`,
+      {key: testKey, id: testId, data: 'testData2'},
+      {headers: { SecretToken: `${adminSecretToken}`}
+    });
+    expect(respUpdate.status).toBe(200);
+
+    // Get updated data
     await new Promise((resolve) => setTimeout(resolve, 500));
+    const respGet2 = await axios.get(`${apiUrl}?key=${testKey}&id=${testId}`, {
+      headers: { SecretToken: `${adminSecretToken}` }
+    });
+    expect(respGet2.status).toBe(200);
+    expect(respGet2.data.length).toEqual(1);
+    expect(respGet2.data[0].data).toBe('testData2');
+
+    // ok
+    // Get updated data
+    const respGet3 = await axios.get(`${apiUrl}?key=${testKey}&id=${testId}`);
+    expect(respGet3.status).toBe(200);
+
+    // Other user can't update
+    try {
+      const respAnonymousUpdate = await axios.post(`${apiUrl}`,
+        {key: testKey, id: testId, data: 'testData3'},
+      );
+      expect(respAnonymousUpdate.status).toBe(403);
+    } catch (error) {
+      expect(error.response.status).toBe(403);
+    }
+
+    // Only owner or admin can delete
     try {
       const respAnonymousDelete = await axios.delete(`${apiUrl}`, { data: { key: testKey, id: testId } });
       expect(respAnonymousDelete.status).toBe(401);        

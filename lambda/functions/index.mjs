@@ -152,8 +152,42 @@ async function handlePostRequest(event) {
     },
   };
 
-  await dynamoDB.send(new PutCommand(newItem));
+  // If the id is provided, delete all items with the same id
+  if(id){
+    // Only the owner of the item can update it
+    const queryCommand = new QueryCommand({
+      TableName: tableName,
+      IndexName: 'idIndex',
+      KeyConditionExpression: '#key = :keyValue AND #id = :idValue',
+      ExpressionAttributeNames: {
+        '#key': 'key',
+        '#id': 'id',
+      },
+      ExpressionAttributeValues: {
+        ':keyValue': key,
+        ':idValue': id
+      },
+    });
+    const queryResult = await dynamoDB.send(queryCommand);
+    const numAllItems = queryResult.Items.length;
+    const items = queryResult.Items.filter(item => { return (item.owner === auth.user && auth.user !== 'anonymous') || auth.role === 'admin'});
 
+    // Only the owner of the item can update it
+    if(numAllItems !== items.length){
+      return createResponse(403, { message: 'Forbidden: You can only update your own items.' });
+    }
+
+    // Add the new item
+    await dynamoDB.send(new PutCommand(newItem));
+
+    // Delete all old items with the same id
+    for(const item of items){
+      await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created: item.created } }));
+    }
+    return createResponse(200, { message: 'Item added successfully', owner: owner });
+  }
+
+  await dynamoDB.send(new PutCommand(newItem));
   return createResponse(200, { message: 'Item added successfully', owner: owner });
 }
 
