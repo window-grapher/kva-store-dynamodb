@@ -3,13 +3,11 @@ import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import { env } from 'process';
-
-const adminUserSecretToken : string = env.ADMIN_USER_SECRET_TOKEN as string;
-const authenticatedUserSecretToken : string = env.AUTHENTICATED_USER_SECRET_TOKEN as string;
 
 interface KvaStoreDynamodbStackProps extends cdk.StackProps {
   envName: string; // e.g. 'staging', 'production'
+  adminUserSecretToken: string;
+  authenticatedUserSecretToken: string;
 }
 
 export class KvaStoreDynamodbStack extends cdk.Stack {
@@ -68,8 +66,8 @@ export class KvaStoreDynamodbStack extends cdk.Stack {
         functionName: 'keyValueArrayStoreTestDataInitHandler',
         environment: {
           BRANCH_NAME: props.envName,
-          ADMIN_USER_SECRET_TOKEN: adminUserSecretToken,
-          AUTHENTICATED_USER_SECRET_TOKEN: authenticatedUserSecretToken,
+          ADMIN_USER_SECRET_TOKEN: props.adminUserSecretToken,
+          AUTHENTICATED_USER_SECRET_TOKEN: props.authenticatedUserSecretToken,
         }
       });
       functions.push(initFunction);
