@@ -1,5 +1,6 @@
 // Import DynamoDB client and commands
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { PutCommand, DeleteAllCommand } from '@aws-sdk/lib-dynamodb';
 
 // Set the name of the DynamoDB table
 const branchName = process.env.BRANCH_NAME;
