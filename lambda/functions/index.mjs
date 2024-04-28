@@ -21,26 +21,31 @@ let lastUpdatedTime = null;
 
 // Handler for incoming requests
 export const handler = async (event) => {
+  console.log('Received event:', JSON.stringify(event, null, 2));
   try {
-    const httpMethod = event?.requestContext?.http?.method;
-    const path = event?.requestContext?.http?.path;
-    if(!httpMethod || !path) return createResponse(400, { message: 'Bad Request' });
+  // Extract method and path from API Gateway event
+  const httpMethod = event?.requestContext?.http?.method;
+  const path = event?.rawPath;
 
-    if (path === '/auth') {
-      try {
-        return await handleAuthRequest(event);
-      } catch (error) {
-        console.error(error);
-        return createResponse(500, { message: error.message });
+  if (!httpMethod || !path) {
+    return createResponse(400, { message: 'Bad Request' });
+  }
+
+  // Route based on the path and method
+  switch (path) {
+    case '/auth':
+      if (httpMethod === 'POST') {
+        return handleAuthRequest(event);
       }
-    } else {
+      break;
+    case '/items':  // Assuming there is a resource called 'items'
       switch (httpMethod) {
         case 'GET':
-          return await handleGetRequest(event);
+          return handleGetRequest(event);
         case 'POST':
-          return await handlePostRequest(event);
+          return handlePostRequest(event);
         case 'DELETE':
-          return await handleDeleteRequest(event);
+          return handleDeleteRequest(event);
         case 'OPTIONS':
           // Respond to CORS pre-flight request
           return createResponse(204, {}, {
@@ -52,6 +57,7 @@ export const handler = async (event) => {
           return createResponse(405, { message: 'Method Not Allowed' });
       }
     }
+    return createResponse(405, { message: 'Path Not Allowed' });
   } catch (error) {
     console.error(error);
     return createResponse(500, { message: error.message });
