@@ -69,7 +69,18 @@ export class KvaStoreDynamodbStack extends cdk.Stack {
 
     // Add a resource and method to the API Gateway
     const resource = api.root.addResource('keyValueArrayStore');
-    resource.addMethod('GET', new apigateway.LambdaIntegration(myFunction));
+    resource.addMethod('GET', new apigateway.LambdaIntegration(myFunction), {
+      authorizationType: apigateway.AuthorizationType.NONE
+    });
+    resource.addMethod('POST', new apigateway.LambdaIntegration(myFunction), {
+      authorizationType: apigateway.AuthorizationType.NONE
+    });
+    resource.addMethod('DELETE', new apigateway.LambdaIntegration(myFunction), {
+      authorizationType: apigateway.AuthorizationType.NONE
+    });
+    resource.addMethod('OPTIONS', new apigateway.LambdaIntegration(myFunction), {
+      authorizationType: apigateway.AuthorizationType.NONE
+    });
 
     // Staging test data initialization for DynamoDB
     if (props.envName === 'staging') {
