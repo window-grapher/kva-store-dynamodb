@@ -1,9 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 
-const data = (await import('./data.json', {
-  assert: { type: 'json' }
-})).default;
+const data = JSON.parse(await fs.readFile(new URL('./data.json', import.meta.url), 'utf-8'));
 
 // Create an instance of the DynamoDB client
 const dynamoDBClient = new DynamoDBClient({});

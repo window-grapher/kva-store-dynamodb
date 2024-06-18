@@ -3,4 +3,4 @@ module.exports = {
     '^.+\\.m?js$': 'babel-jest'
   },
   moduleFileExtensions: ['js', 'mjs']
-}
+};

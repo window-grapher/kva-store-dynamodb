@@ -1,5 +1,0 @@
-dist.js
-*.test.js
-node_modules
-cdk.out
-tool/*
