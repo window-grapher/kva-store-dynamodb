@@ -1,88 +1,88 @@
 // Import DynamoDB client and commands
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
-import jwt from 'jsonwebtoken';
-import axios from 'axios';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
+import { DynamoDBDocumentClient, QueryCommand, PutCommand, DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
+import jwt from 'jsonwebtoken'
+import axios from 'axios'
 
 // Set the name of the DynamoDB table
-const branchName = process.env.BRANCH_NAME;
-const tableName = `keyValueArrayStoreTable-${branchName}`;
+const branchName = process.env.BRANCH_NAME
+const tableName = `keyValueArrayStoreTable-${branchName}`
 
 // Create an instance of the DynamoDB client
-const dynamoDBClient = new DynamoDBClient({});
-const dynamoDB = DynamoDBDocumentClient.from(dynamoDBClient);
+const dynamoDBClient = new DynamoDBClient({})
+const dynamoDB = DynamoDBDocumentClient.from(dynamoDBClient)
 
 // Google public keys URL
-const GOOGLE_PUBLIC_KEYS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+const GOOGLE_PUBLIC_KEYS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com'
 
 // Cache Google's public keys
-let cachedGooglePublicKeys = null;
-let lastUpdatedTime = null;
+let cachedGooglePublicKeys = null
+let lastUpdatedTime = null
 
 // Handler for incoming requests
 export const handler = async (event) => {
-  console.log('Received event:', JSON.stringify(event, null, 2));
+  console.log('Received event:', JSON.stringify(event, null, 2))
   try {
-    const httpMethod = event?.requestContext?.http?.method;
-    const path = event?.requestContext?.http?.path;
-    if(!httpMethod || !path) return createResponse(400, { message: 'Bad Request' });
+    const httpMethod = event?.requestContext?.http?.method
+    const path = event?.requestContext?.http?.path
+    if (!httpMethod || !path) return createResponse(400, { message: 'Bad Request' })
 
     if (path === '/auth') {
       try {
-        return await handleAuthRequest(event);
+        return await handleAuthRequest(event)
       } catch (error) {
-        console.error(error);
-        return createResponse(500, { message: error.message });
+        console.error(error)
+        return createResponse(500, { message: error.message })
       }
     } else {
       switch (httpMethod) {
         case 'GET':
-          return await handleGetRequest(event);
+          return await handleGetRequest(event)
         case 'POST':
-          return await handlePostRequest(event);
+          return await handlePostRequest(event)
         case 'DELETE':
-          return await handleDeleteRequest(event);
+          return await handleDeleteRequest(event)
         case 'OPTIONS':
           // Respond to CORS pre-flight request
           return createResponse(204, {}, {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Headers': 'Content-Type,Authorization',
             'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,DELETE'
-          });
+          })
         default:
-          return createResponse(405, { message: 'Method Not Allowed' });
+          return createResponse(405, { message: 'Method Not Allowed' })
       }
     }
   } catch (error) {
-    console.error(error);
-    return createResponse(500, { message: error.message });
+    console.error(error)
+    return createResponse(500, { message: error.message })
   }
-};
+}
 
 // Handle GET requests
-async function handleGetRequest(event) {
+async function handleGetRequest (event) {
   if (!event.queryStringParameters || !event.queryStringParameters.key) {
-    return createResponse(400, { message: 'Key parameter is required' });
+    return createResponse(400, { message: 'Key parameter is required' })
   }
 
-  const auth = await authorize(event);
-  const key = event.queryStringParameters.key;
-  let limitParam = parseInt(event.queryStringParameters.limit);
-  
+  const auth = await authorize(event)
+  const key = event.queryStringParameters.key
+  let limitParam = parseInt(event.queryStringParameters.limit)
+
   // Get startDate and endDate
-  const start = event.queryStringParameters.start;
-  const end = event.queryStringParameters.end;
+  const start = event.queryStringParameters.start
+  const end = event.queryStringParameters.end
 
   if (key.startsWith('system')) {
-    return createResponse(400, { message: 'Key "system*" is invalid.' });
+    return createResponse(400, { message: 'Key "system*" is invalid.' })
   }
 
   if (isNaN(limitParam) || limitParam < 1 || limitParam > 100) {
-    limitParam = 100; // or set a default value
+    limitParam = 100 // or set a default value
   }
 
-  const id = event.queryStringParameters.id;
-  
+  const id = event.queryStringParameters.id
+
   let params = {}
 
   if (id) {
@@ -93,52 +93,53 @@ async function handleGetRequest(event) {
       ExpressionAttributeNames: { '#key': 'key', '#id': 'id' },
       ExpressionAttributeValues: { ':keyValue': key, ':idValue': id },
       ScanIndexForward: false,
-      ...(limitParam && { Limit: limitParam }),
-    };
+      ...(limitParam && { Limit: limitParam })
+    }
   } else {
     params = {
       TableName: tableName,
-      KeyConditionExpression: '#key = :keyValue' + 
-        (start && end ? ' AND #created BETWEEN :startDate AND :endDate' : 
-         start ? ' AND #created >= :startDate' : 
-         end ? ' AND #created <= :endDate' : ''),
-      ExpressionAttributeNames: { 
+      KeyConditionExpression: '#key = :keyValue' +
+        (start && end
+          ? ' AND #created BETWEEN :startDate AND :endDate'
+          : start
+            ? ' AND #created >= :startDate'
+            : end ? ' AND #created <= :endDate' : ''),
+      ExpressionAttributeNames: {
         '#key': 'key',
         ...(start || end ? { '#created': 'created' } : {})
       },
-      ExpressionAttributeValues: { 
+      ExpressionAttributeValues: {
         ':keyValue': key,
         ...(start && { ':startDate': start }),
         ...(end && { ':endDate': end })
       },
       ScanIndexForward: false,
-      ...(limitParam && { Limit: limitParam }),
-    };
+      ...(limitParam && { Limit: limitParam })
+    }
   }
 
-  const command = new QueryCommand(params);
-  const data = await dynamoDB.send(command);
+  const command = new QueryCommand(params)
+  const data = await dynamoDB.send(command)
 
-  const items = (data.Items ?? []).filter(item => item.readable === '*' || (item.owner === auth.user && auth.user !== 'anonymous') || auth.role === 'admin');
+  const items = (data.Items ?? []).filter(item => item.readable === '*' || (item.owner === auth.user && auth.user !== 'anonymous') || auth.role === 'admin')
 
-  return createResponse(200, items);
+  return createResponse(200, items)
 }
 
 // Handle POST requests
-async function handlePostRequest(event) {
-
-  const auth = await authorize(event);
-  const body = JSON.parse(event.body);
-  const { key, readable = '*', data, id } = body;
-  const owner = auth.user;
-  const created = new Date().toISOString(); // Get current date-time in ISO 8601 format
+async function handlePostRequest (event) {
+  const auth = await authorize(event)
+  const body = JSON.parse(event.body)
+  const { key, readable = '*', data, id } = body
+  const owner = auth.user
+  const created = new Date().toISOString() // Get current date-time in ISO 8601 format
 
   if (key.startsWith('system')) {
-    return createResponse(400, { message: 'Key "system*" is invalid.' });
+    return createResponse(400, { message: 'Key "system*" is invalid.' })
   }
-  if (key.startsWith(`privateKey`) && !key.startsWith(`privateKey-${auth.user}`)) {
+  if (key.startsWith('privateKey') && !key.startsWith(`privateKey-${auth.user}`)) {
     // Only authenticated users can add private data
-    return createResponse(403, { message: `Only xxx can add "privateKey-xxx".` });
+    return createResponse(403, { message: 'Only xxx can add "privateKey-xxx".' })
   }
 
   const newItem = {
@@ -149,12 +150,12 @@ async function handlePostRequest(event) {
       owner,
       created,
       data,
-      id,
-    },
-  };
+      id
+    }
+  }
 
   // If the id is provided, delete all items with the same id
-  if(id){
+  if (id) {
     // Only the owner of the item can update it
     const queryCommand = new QueryCommand({
       TableName: tableName,
@@ -162,51 +163,51 @@ async function handlePostRequest(event) {
       KeyConditionExpression: '#key = :keyValue AND #id = :idValue',
       ExpressionAttributeNames: {
         '#key': 'key',
-        '#id': 'id',
+        '#id': 'id'
       },
       ExpressionAttributeValues: {
         ':keyValue': key,
         ':idValue': id
-      },
-    });
-    const queryResult = await dynamoDB.send(queryCommand);
-    const numAllItems = queryResult.Items.length;
-    const items = queryResult.Items.filter(item => { return (item.owner === auth.user && auth.user !== 'anonymous') || auth.role === 'admin'});
+      }
+    })
+    const queryResult = await dynamoDB.send(queryCommand)
+    const numAllItems = queryResult.Items.length
+    const items = queryResult.Items.filter(item => { return (item.owner === auth.user && auth.user !== 'anonymous') || auth.role === 'admin' })
 
     // Only the owner of the item can update it
-    if(numAllItems !== items.length){
-      return createResponse(403, { message: 'Forbidden: You can only update your own items.' });
+    if (numAllItems !== items.length) {
+      return createResponse(403, { message: 'Forbidden: You can only update your own items.' })
     }
 
     // Add the new item
-    await dynamoDB.send(new PutCommand(newItem));
+    await dynamoDB.send(new PutCommand(newItem))
 
     // Delete all old items with the same id
-    for(const item of items){
-      await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created: item.created } }));
+    for (const item of items) {
+      await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created: item.created } }))
     }
-    return createResponse(200, { message: 'Item added successfully', owner: owner });
+    return createResponse(200, { message: 'Item added successfully', owner })
   }
 
-  await dynamoDB.send(new PutCommand(newItem));
-  return createResponse(200, { message: 'Item added successfully', owner: owner });
+  await dynamoDB.send(new PutCommand(newItem))
+  return createResponse(200, { message: 'Item added successfully', owner })
 }
 
 // Handle DELETE requests
-async function handleDeleteRequest(event) {
-  const auth = await authorize(event);
+async function handleDeleteRequest (event) {
+  const auth = await authorize(event)
   if (!auth.isAuthorized) {
-    return createResponse(401, { message: 'Unauthorized' });
+    return createResponse(401, { message: 'Unauthorized' })
   }
 
-  const body = JSON.parse(event.body);
-  const { key, created, id } = body;
+  const body = JSON.parse(event.body)
+  const { key, created, id } = body
 
   if (key.startsWith('system') || auth.role === 'anonymous') {
-    return createResponse(400, { message: 'Key "system*" is invalid or unauthorized action.' });
+    return createResponse(400, { message: 'Key "system*" is invalid or unauthorized action.' })
   }
 
-  if(id){
+  if (id) {
     // Only the owner of the item can delete it
     const queryCommand = new QueryCommand({
       TableName: tableName,
@@ -214,39 +215,39 @@ async function handleDeleteRequest(event) {
       KeyConditionExpression: '#key = :keyValue AND #id = :idValue',
       ExpressionAttributeNames: {
         '#key': 'key',
-        '#id': 'id',
+        '#id': 'id'
       },
       ExpressionAttributeValues: {
         ':keyValue': key,
         ':idValue': id
-      },
-    });
-    const queryResult = await dynamoDB.send(queryCommand);
-    const items = queryResult.Items.filter(item => { return item.owner === auth.user || auth.role === 'admin'});
-    if(items.length === 0){
-      return createResponse(403, { message: 'Forbidden: You can only delete your own items.' });
+      }
+    })
+    const queryResult = await dynamoDB.send(queryCommand)
+    const items = queryResult.Items.filter(item => { return item.owner === auth.user || auth.role === 'admin' })
+    if (items.length === 0) {
+      return createResponse(403, { message: 'Forbidden: You can only delete your own items.' })
     }
-    for(const item of items){
-      await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created: item.created } }));
+    for (const item of items) {
+      await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created: item.created } }))
     }
-    return createResponse(200, { message: 'Item deleted successfully' });
+    return createResponse(200, { message: 'Item deleted successfully' })
   } else {
     // Only the owner of the item can delete it
-    const item = await dynamoDB.send(new GetCommand({ TableName: tableName, Key: { key, created } }));
+    const item = await dynamoDB.send(new GetCommand({ TableName: tableName, Key: { key, created } }))
     if (item.Item && (item.Item.owner === auth.user || auth.role === 'admin')) {
-      await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created } }));
-      return createResponse(200, { message: 'Item deleted successfully' });
+      await dynamoDB.send(new DeleteCommand({ TableName: tableName, Key: { key, created } }))
+      return createResponse(200, { message: 'Item deleted successfully' })
     } else {
-      return createResponse(403, { message: 'Forbidden: You can only delete your own items.' });
+      return createResponse(403, { message: 'Forbidden: You can only delete your own items.' })
     }
   }
 }
 
 // Handle Auth requests
-async function handleAuthRequest(event) {
-  const auth = await authorize(event);
+async function handleAuthRequest (event) {
+  const auth = await authorize(event)
   if (!auth.isAuthorized) {
-    return createResponse(401, { message: 'Unauthorized' });
+    return createResponse(401, { message: 'Unauthorized' })
   }
 
   // Assuming the user's info and role are contained in the auth object
@@ -254,13 +255,13 @@ async function handleAuthRequest(event) {
   const userInfo = {
     user: auth.user,
     role: auth.role
-  };
+  }
 
-  return createResponse(200, userInfo);
+  return createResponse(200, userInfo)
 }
 
 // Utility function for creating HTTP responses with CORS enabled
-function createResponse(statusCode, body) {
+function createResponse (statusCode, body) {
   return {
     statusCode,
     body: JSON.stringify(body),
@@ -268,108 +269,106 @@ function createResponse(statusCode, body) {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-      'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,DELETE',
-    },
-  };
+      'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,DELETE'
+    }
+  }
 }
 
 // Authorize the request
 export const authorize = async (event) => {
-  
-  const secretToken = event?.headers?.secrettoken;
-  const tokenStr = event?.headers?.authorization;
+  const secretToken = event?.headers?.secrettoken
+  const tokenStr = event?.headers?.authorization
 
-  let errorMessage = '';
+  let errorMessage = ''
 
   // authorized by SecretToken
-  if(secretToken){
+  if (secretToken) {
     try {
-      const key = 'systemSecretToken-' + secretToken;
-      const limitParam = 1;
+      const key = 'systemSecretToken-' + secretToken
+      const limitParam = 1
       const params = {
         TableName: tableName,
         KeyConditionExpression: '#key = :keyValue',
         ExpressionAttributeNames: { '#key': 'key' },
         ExpressionAttributeValues: { ':keyValue': key },
         ScanIndexForward: false,
-        ...(limitParam && { Limit: limitParam }),
-      };
-    
-      const command = new QueryCommand(params);
-      const data = await dynamoDB.send(command);
-      const user = JSON.parse(data.Items[0].data).user;
-      
-      const role = await checkUserRole(user);
+        ...(limitParam && { Limit: limitParam })
+      }
+
+      const command = new QueryCommand(params)
+      const data = await dynamoDB.send(command)
+      const user = JSON.parse(data.Items[0].data).user
+
+      const role = await checkUserRole(user)
 
       if (data.Items && data.Items.length === 1) {
         return {
           status: 'ok',
           isAuthorized: true,
-          user: user,
+          user,
           role: role ?? 'authenticatedUser',
-          message: 'Authorized by SecretToken',
+          message: 'Authorized by SecretToken'
         }
       }
-      errorMessage = 'Unauthorized: SecretToken is invalid';
+      errorMessage = 'Unauthorized: SecretToken is invalid'
     } catch (error) {
-      console.error({error});
-      errorMessage = `Unauthorized: ${error.message}`;
+      console.error({ error })
+      errorMessage = `Unauthorized: ${error.message}`
     }
     return {
       status: 'failed',
       isAuthorized: false,
       user: 'anonymous',
       role: 'anonymous',
-      message: errorMessage,
+      message: errorMessage
     }
   }
 
   // authorized by JWT token
   if (tokenStr?.startsWith('Bearer ')) {
-
     // Get the token from the Authorization header
-    const token = tokenStr.split(' ')[1];
+    const token = tokenStr.split(' ')[1]
 
     try {
       // if the public key cache is uninitialized, expired, or updated more than an hour ago, get the public keys
       if (!cachedGooglePublicKeys || !lastUpdatedTime || (Date.now() - lastUpdatedTime) > 3600000) {
         const response = await axios.get(GOOGLE_PUBLIC_KEYS_URL, {
           headers: { 'Cache-Control': 'no-cache' }
-        });
-        cachedGooglePublicKeys = response.data;
-        lastUpdatedTime = Date.now();
+        })
+        cachedGooglePublicKeys = response.data
+        lastUpdatedTime = Date.now()
       }
 
       // Get the kid from the token
-      const unverifiedToken = jwt.decode(token, { complete: true });
-      const kid = unverifiedToken?.header.kid;
+      const unverifiedToken = jwt.decode(token, { complete: true })
+      const kid = unverifiedToken?.header.kid
 
       // Select the appropriate public key
-      const publicKey = cachedGooglePublicKeys[kid];
+      const publicKey = cachedGooglePublicKeys[kid]
       if (!publicKey) {
-        throw new Error('Invalid token: kid not recognized');
+        throw new Error('Invalid token: kid not recognized')
       }
 
       // Verify the token
-      const decoded = jwt.verify(token, publicKey, { algorithms: ['RS256'] });
+      const decoded = jwt.verify(token, publicKey, { algorithms: ['RS256'] })
 
-      const role = await checkUserRole(decoded.email);
+      const role = await checkUserRole(decoded.email)
       return {
         status: 'ok',
         isAuthorized: true,
         user: decoded.email,
         role: role ?? 'authenticatedUser',
-        message: 'Authorized by JWT',
-      };
+        message: 'Authorized by JWT'
+      }
     } catch (error) {
-      console.error({error});
+      console.error({ error })
       // failed to verify the token or token is expired
       return {
         status: 'failed',
         isAuthorized: false,
         user: 'anonymous',
         role: 'anonymous',
-        message: `Unauthorized: ${error.message}`,
+        message: `Unauthorized: ${error.message}`
       }
     }
   }
@@ -380,30 +379,30 @@ export const authorize = async (event) => {
     isAuthorized: false,
     user: 'anonymous',
     role: 'anonymous',
-    message: 'Unauthorized',
+    message: 'Unauthorized'
   }
 }
 
 // Check user role
 export const checkUserRole = async (userId) => {
-  if(userId === 'anonymous') return null;
-  const key = `systemUser-${userId}`;
-  const limitParam = 1;
+  if (userId === 'anonymous') return null
+  const key = `systemUser-${userId}`
+  const limitParam = 1
   const params = {
     TableName: tableName,
     KeyConditionExpression: '#key = :keyValue',
     ExpressionAttributeNames: { '#key': 'key' },
     ExpressionAttributeValues: { ':keyValue': key },
     ScanIndexForward: false,
-    ...(limitParam && { Limit: limitParam }),
-  };
-
-  const command = new QueryCommand(params);
-  const data = await dynamoDB.send(command);
-  if (data.Items && data.Items.length === 1 && data.Items[0].data) {
-    return JSON.parse(data.Items[0].data)?.role;
+    ...(limitParam && { Limit: limitParam })
   }
-  return null;
+
+  const command = new QueryCommand(params)
+  const data = await dynamoDB.send(command)
+  if (data.Items && data.Items.length === 1 && data.Items[0].data) {
+    return JSON.parse(data.Items[0].data)?.role
+  }
+  return null
 }
 
-export { handleGetRequest, handlePostRequest, handleDeleteRequest };
+export { handleGetRequest, handlePostRequest, handleDeleteRequest }
