@@ -1,3 +1,4 @@
+import globals from 'globals';
 
 export default [
   {
@@ -10,15 +11,17 @@ export default [
     ]
   },
   {
-    files: ['*.js', '*.mjs','lambda/functions/*.mjs'],
+    files: ['*.js', '*.mjs', 'lambda/functions/**/*.js', 'lambda/functions/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: {
-        browser: 'readonly',
-        commonjs: 'readonly',
-        es2021: 'readonly',
-        node: 'readonly'
+        ...globals.browser,
+        ...globals.commonjs,
+        ...globals.es2021,
+        ...globals.node,
+        process: 'readonly',
+        console: 'readonly'
       }
     },
     rules: {
