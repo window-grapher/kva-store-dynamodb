@@ -32,7 +32,7 @@
     "@aws-sdk/client-dynamodb": "^3.529.1",
     "@aws-sdk/lib-dynamodb": "^3.529.1",
     "aws-cdk-lib": "^2.146.0",
-    "axios": "^1.6.7",
+    "axios": "^1.7.4",
     "constructs": "^10.3.0",
     "dotenv": "^16.4.5",
     "globals": "^15.6.0",
