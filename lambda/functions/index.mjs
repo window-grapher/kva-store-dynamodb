@@ -25,7 +25,9 @@ export const handler = async (event) => {
   try {
     const httpMethod = event?.requestContext?.http?.method;
     const path = event?.requestContext?.http?.path;
-    if (!httpMethod || !path) {return createResponse(400, { message: 'Bad Request' });}
+    if (!httpMethod || !path) {
+      return createResponse(400, { message: 'Bad Request' });
+    }
 
     if (path === '/auth') {
       try {
@@ -36,21 +38,21 @@ export const handler = async (event) => {
       }
     } else {
       switch (httpMethod) {
-      case 'GET':
-        return await handleGetRequest(event);
-      case 'POST':
-        return await handlePostRequest(event);
-      case 'DELETE':
-        return await handleDeleteRequest(event);
-      case 'OPTIONS':
-        // Respond to CORS pre-flight request
-        return createResponse(204, {}, {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-          'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,DELETE'
-        });
-      default:
-        return createResponse(405, { message: 'Method Not Allowed' });
+        case 'GET':
+          return await handleGetRequest(event);
+        case 'POST':
+          return await handlePostRequest(event);
+        case 'DELETE':
+          return await handleDeleteRequest(event);
+        case 'OPTIONS':
+          // Respond to CORS pre-flight request
+          return createResponse(204, {}, {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+            'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,DELETE'
+          });
+        default:
+          return createResponse(405, { message: 'Method Not Allowed' });
       }
     }
   } catch (error) {
@@ -60,7 +62,7 @@ export const handler = async (event) => {
 };
 
 // Handle GET requests
-async function handleGetRequest (event) {
+async function handleGetRequest(event) {
   if (!event.queryStringParameters || !event.queryStringParameters.key) {
     return createResponse(400, { message: 'Key parameter is required' });
   }
@@ -127,7 +129,7 @@ async function handleGetRequest (event) {
 }
 
 // Handle POST requests
-async function handlePostRequest (event) {
+async function handlePostRequest(event) {
   const auth = await authorize(event);
   const body = JSON.parse(event.body);
   const { key, readable = '*', data, id } = body;
@@ -194,7 +196,7 @@ async function handlePostRequest (event) {
 }
 
 // Handle DELETE requests
-async function handleDeleteRequest (event) {
+async function handleDeleteRequest(event) {
   const auth = await authorize(event);
   if (!auth.isAuthorized) {
     return createResponse(401, { message: 'Unauthorized' });
@@ -244,14 +246,12 @@ async function handleDeleteRequest (event) {
 }
 
 // Handle Auth requests
-async function handleAuthRequest (event) {
+async function handleAuthRequest(event) {
   const auth = await authorize(event);
   if (!auth.isAuthorized) {
     return createResponse(401, { message: 'Unauthorized' });
   }
 
-  // Assuming the user's info and role are contained in the auth object
-  // Modify as needed to fit your user info structure
   const userInfo = {
     user: auth.user,
     role: auth.role
@@ -261,7 +261,7 @@ async function handleAuthRequest (event) {
 }
 
 // Utility function for creating HTTP responses with CORS enabled
-function createResponse (statusCode, body) {
+function createResponse(statusCode, body) {
   return {
     statusCode,
     body: JSON.stringify(body),
@@ -385,7 +385,9 @@ export const authorize = async (event) => {
 
 // Check user role
 export const checkUserRole = async (userId) => {
-  if (userId === 'anonymous') {return null;}
+  if (userId === 'anonymous') {
+    return null;
+  }
   const key = `systemUser-${userId}`;
   const limitParam = 1;
   const params = {
