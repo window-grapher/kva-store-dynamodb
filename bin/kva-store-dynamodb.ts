@@ -4,7 +4,7 @@ import * as cdk from 'aws-cdk-lib';
 import { KvaStoreDynamodbStack } from '../lib/kva-store-dynamodb-stack';
 
 // Get the environment from the environment variable, default is 'staging'
-const env = process.env.ENVIRONMENT || 'wg-stg';
+const env = process.env.ENVIRONMENT || 'stg';
 
 // Get the secret tokens from the environment variables
 const adminUserSecretToken : string = process.env.ADMIN_USER_SECRET_TOKEN || 'admin';
