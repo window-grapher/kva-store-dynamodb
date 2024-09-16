@@ -2,7 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 
 interface KvaStoreDynamodbStackProps extends cdk.StackProps {
@@ -18,13 +17,6 @@ export class KvaStoreDynamodbStack extends cdk.Stack {
     // e.g. `keyValueArrayStoreTable-staging`
     const tableName = `keyValueArrayStoreTable-${props.envName}`;
     const functionName = `keyValueArrayStoreHandler-${props.envName}`;
-    const bucketName = `keyvaluearraystorebucket-${props.envName.toLowerCase()}`; // S3 bucket name is case-insensitive
-
-    // Create an S3 bucket
-    const bucket = new s3.Bucket(this, 'keyValueArrayStoreBucket', {
-      bucketName: bucketName,
-      // Bucket settings...
-    });
     
     // DynamoDB table definition
     const table = new dynamodb.Table(this, 'keyValueArrayStoreTable', {
@@ -98,12 +90,10 @@ export class KvaStoreDynamodbStack extends cdk.Stack {
 
       // Add permissions
       table.grantReadWriteData(initFunction);
-      bucket.grantReadWrite(initFunction);
     }
 
     
     // Add permissions
     table.grantReadWriteData(myFunction);
-    bucket.grantReadWrite(myFunction);
   }
 }
